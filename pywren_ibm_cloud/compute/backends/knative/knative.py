@@ -38,18 +38,26 @@ class KnativeServingBackend:
         self.endpoint = self.knative_config.get('endpoint')
         self.service_hosts = {}
 
-        # k8s config can be in ~/.kube/config or generate kube-config.yml file and
+        # k8s config can be incluster, in ~/.kube/config or generate kube-config.yml file and
         # set env variable KUBECONFIG=<path-to-kube-confg>
-        config.load_kube_config()
+        try:
+            config.load_kube_config()
+            
+            # get current context
+            current_context = config.list_kube_config_contexts()[1]
+            current_context_details = current_context.get('context')
+            # get namespace of current context
+            self.namespace = current_context_details.get('namespace', 'default')
+            # get the cluster
+            self.cluster = current_context_details.get('cluster')
+        except:
+            config.load_incluster_config()
+            self.namespace = 'default'
+            self.cluster = 'default'
+
         self.api = client.CustomObjectsApi()
         self.v1 = client.CoreV1Api()
-        # get current context
-        current_context = config.list_kube_config_contexts()[1]
-        current_context_details = current_context.get('context')
-        # get namespace of current context
-        self.namespace = current_context_details.get('namespace', 'default')
-        # get the cluster
-        self.cluster = current_context_details.get('cluster')
+
         self.headers = {'content-type': 'application/json'}
 
         if self.endpoint is None:
