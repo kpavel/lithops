@@ -226,7 +226,7 @@ def _create_job(config, internal_storage, executor_id, job_id, func, data, runti
     if False:
         internal_storage.put_func(func_key, func_module_str)
     else:
-        _inject_in_runtime_docker_image(job_description, func, mod_paths) 
+        job_description['func_key'] = _inject_in_runtime_docker_image(job_description, func_str, mod_paths, module_data) 
 
     func_upload_end = time.time()
 
@@ -236,7 +236,7 @@ def _create_job(config, internal_storage, executor_id, job_id, func, data, runti
 
     return job_description
 
-def _inject_in_runtime_docker_image(job_description, func, mod_paths):
+def _inject_in_runtime_docker_image(job_description, func_str, mod_paths, module_data):
     import inspect
     import tempfile
     from distutils.dir_util import copy_tree
@@ -245,37 +245,42 @@ def _inject_in_runtime_docker_image(job_description, func, mod_paths):
     
     MOD_PATH='ext_mod_path'
     if os.path.exists(MOD_PATH):
+      if os.path.isdir(MOD_PATH):
         shutil.rmtree(MOD_PATH)
+      else:
+        os.remove(MOD_PATH)
 
     # Generate per function unique hashsum that will be used as runtime docker image tag
-    f_src = inspect.getsource(func)
-    func_file_name = hashlib.md5(f_src.encode('utf-8')).hexdigest()
+#    f_src = inspect.getsource(func)
+#    import pdb;pdb.set_trace()
+    func_uuid = hashlib.md5(func_str).hexdigest()
+    func_key = '{}/{}.pkl'.format(MOD_PATH, func_uuid)
 
     base_docker_image=job_description['runtime_name']
-    ext_docker_image = "{}:{}".format(base_docker_image, func_file_name)
+    ext_docker_image = "{}:{}".format(base_docker_image, func_uuid)
     ext_docker_file = 'custom.dockerfile'
 
     # Generate Dockerfile extended with function dependencies and function
-    with tempfile.TemporaryDirectory(MOD_PATH) as tmpdirname:
-        for module in mod_paths:
-            if os.path.isdir(module):
-                shutil.copytree(module, '{}/{}'.format(MOD_PATH, os.path.basename(module)))
-            else:
-                shutil.copy2(module, MOD_PATH)
+    os.makedirs(MOD_PATH, exist_ok=True)
+#        for module in mod_paths:
+#            if os.path.isdir(module):
+#                shutil.copytree(module, '{}/{}'.format(MOD_PATH, os.path.basename(module)))
+#            else:
+#                shutil.copy2(module, MOD_PATH)
 
-        source = inspect.getsource(func)
-   
-        with open('{}/{}.py'.format(MOD_PATH, func_file_name), 'w') as f:
-            f.write(source)
+    # save pickled function in the unique file
+    with open(func_key, 'wb') as f:
+        f.write(func_str)
 
-        with open(ext_docker_file, 'w') as df:
+    # unpickle pickled modules
+    _save_modules(module_data, MOD_PATH) 
+
+    with open(ext_docker_file, 'w') as df:
             df.write('\n'.join([
                 'FROM {}'.format(base_docker_image),
-                'ENV PYTHONPATH={}:${}'.format(MOD_PATH,'PYTHONPATH'),
-                'COPY {} {}'.format(MOD_PATH, MOD_PATH)
+                'ENV PYTHONPATH=/{}:${}'.format(MOD_PATH,'PYTHONPATH'),
+                'COPY {} /{}'.format(MOD_PATH, MOD_PATH)
             ]))
-
-    import pdb;pdb.set_trace()
 
     # Call pywren cli to build new extended runtime tagged by function hash
     from pywren_ibm_cloud.cli.runtime import build_and_create_runtime
@@ -286,7 +291,38 @@ def _inject_in_runtime_docker_image(job_description, func, mod_paths):
     # save runtime details to metadata
     # cleanup()
        
-    return func_file_name
+    return "/{}".format(func_key)
+
+def _save_modules(module_data, module_path):
+    """
+    Save modules in the docker image
+    """
+    from pywren_ibm_cloud.utils import b64str_to_bytes
+    import pdb;pdb.set_trace()    
+    if module_data:
+        logger.debug("Writing Function dependencies to local disk")
+#        os.makedirs(module_path, exist_ok=True)
+#        sys.path.append(module_path)
+
+        for m_filename, m_data in module_data.items():
+            m_path = os.path.dirname(m_filename)
+
+            if len(m_path) > 0 and m_path[0] == "/":
+                m_path = m_path[1:]
+            to_make = os.path.join(module_path, m_path)
+            try:
+                os.makedirs(to_make)
+            except OSError as e:
+                if e.errno == 17:
+                    pass
+                else:
+                    raise e
+            full_filename = os.path.join(to_make, os.path.basename(m_filename))
+
+            with open(full_filename, 'wb') as fid:
+                fid.write(b64str_to_bytes(m_data))
+
+        logger.debug("Finished writing Function dependencies")
 
 def clean_job(jobs_to_clean, storage_config, clean_cloudobjects):
     """

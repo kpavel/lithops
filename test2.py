@@ -1,11 +1,13 @@
 import pywren_ibm_cloud as pywren
 import couchdb
-import dataclay
+#import dataclay
 
 def hello(name):
-    print(couchdb)
-    print(dataclay)
-    return 'Hello 224 {}!'.format(name)
+#    print(dataclay)
+    print("aaa") 
+    print(couchdb.Server)
+    print("couchdb version {}".format(couchdb.__version__))
+    return 'Hello 4224 {}!'.format(name)
 
 #pw = pywren.ibm_cf_executor(runtime='kpavel/pywren-test')
 pw = pywren.ibm_cf_executor()

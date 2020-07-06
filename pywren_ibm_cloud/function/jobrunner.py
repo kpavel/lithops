@@ -131,9 +131,9 @@ class JobRunner:
         """
         Unpickle function; it will expect modules to be there
         """
-        logger.debug("Unpickle Function")
+        logger.debug("Unpickle Function {}".format(pickled_func))
         loaded_func = pickle.loads(pickled_func)
-        logger.debug("Finished Function unpickle")
+        logger.debug("Finished Function unpickle {}".format(loaded_func))
 
         return loaded_func
 
@@ -251,13 +251,16 @@ class JobRunner:
         Runs the function
         """
         # self.stats.write('jobrunner_start', time.time())
-        logger.info(f"Started 5 {os.environ}")
+        logger.info(f"Started 7 {os.environ}")
         result = None
         exception = False
         try:
             function = None
             if "FOO" in os.environ:
-                function = locate(os.environ["FOO"])
+                #function = locate(os.environ["FOO"])
+                logger.info(f"Loading pickled funcion from file {self.func_key}")
+                pickled_func = open(self.func_key, "rb").read()
+                function = self._unpickle_function(pickled_func)
             else:
                 loaded_func_all = self._get_function_and_modules()
                 self._save_modules(loaded_func_all['module_data'])
