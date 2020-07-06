@@ -1,4 +1,4 @@
-from pywren_ibm_cloud.cli.runtime import create_runtime, update_runtime, build_runtime, delete_runtime
+from pywren_ibm_cloud.cli.runtime import create_runtime, update_runtime, build_runtime, delete_runtime, build_and_create_runtime
 import logging
 import click
 import os
@@ -9,6 +9,15 @@ import os
 def runtime(ctx):
     pass
 
+
+@runtime.command('bc')
+@click.argument('image_name')
+@click.option('--memory', default=None, help='memory used by the runtime', type=int)
+@click.option('--file', '-f', default=None, help='file needed to build the runtime')
+def build_and_create(image_name, memory, file):
+    logging.basicConfig(level=logging.DEBUG)
+    os.environ["PYWREN_LOGLEVEL"] = 'DEBUG'
+    build_and_create_runtime(image_name, file, memory=memory)
 
 @runtime.command('create')
 @click.argument('image_name')

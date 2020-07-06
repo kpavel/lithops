@@ -27,7 +27,7 @@ from pywren_ibm_cloud.version import __version__
 from pywren_ibm_cloud.utils import is_pywren_function
 from pywren_ibm_cloud.config import CACHE_DIR, load_yaml_config, dump_yaml_config
 from pywren_ibm_cloud.libs.openwhisk.client import OpenWhiskClient
-from pywren_ibm_cloud.compute.utils import create_function_handler_zip
+from pywren_ibm_cloud.compute.utils import create_function_handler_zip, create_main_file_zip
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,8 @@ class IBMCloudFunctionsBackend:
             self.cf_client = OpenWhiskClient(endpoint=self.endpoint,
                                              namespace=self.namespace,
                                              auth=auth,
-                                             user_agent=self.user_agent)
+                                             user_agent=self.user_agent,
+                                             insecure=True)
         elif self.iam_api_key:
             token_manager = DefaultTokenManager(api_key_id=self.iam_api_key)
             token_filename = os.path.join(CACHE_DIR, 'ibm_cf', 'iam_token')
@@ -131,6 +132,97 @@ class IBMCloudFunctionsBackend:
     def _delete_function_handler_zip(self):
         os.remove(ibmcf_config.FH_ZIP_LOCATION)
 
+    def build_and_create_runtime(self, docker_image_name, dockerfile, memory, timeout):
+        """
+        Builds a new base runtime from a Docker file, pushes it to the Docker hub and registers
+        runtime action in CF
+        """
+        logger.info('Building a new pywren runtime docker image from Dockerfile')
+        logger.info('Target docker image name: {}'.format(docker_image_name))
+#        import pdb;pdb.set_trace()
+
+        create_function_handler_zip(ibmcf_config.FH_ZIP_LOCATION, '__main__.py', __file__)
+
+        if dockerfile:
+            cmd = 'DOCKER_BUILDKIT=1 docker build -t {} -f {} .'.format(docker_image_name, dockerfile)
+        else:
+            cmd = 'DOCKER_BUILDKIT=1 docker build -t {} .'.format(docker_image_name)
+
+        res = os.system(cmd)
+        if res != 0:
+            raise Exception('There was an error building the runtime')
+
+        cmd = 'docker push {}'.format(docker_image_name)
+        res = os.system(cmd)
+        if res != 0:
+            raise Exception('There was an error pushing the runtime to the container registry')
+
+#        import pdb;pdb.set_trace()
+        runtime_meta = self._generate_runtime_meta(docker_image_name)
+
+        logger.info('Creating new PyWren runtime based on Docker image {}'.format(docker_image_name))
+
+        self.cf_client.create_package(self.package)
+        action_name = self._format_action_name(docker_image_name, memory)
+
+        import zipfile
+#        main_file = zipfile.ZipFile(ibmcf_config.FH_ZIP_LOCATION).read('__main__.py')
+        create_main_file_zip('mainfile.zip', '__main__.py', __file__)
+
+#        with zipfile.ZipFile('mainfile.zip', 'r', zipfile.ZIP_DEFLATED) as mainfile_zip:
+#           action_bin = mainfile_zip.read()
+
+        with open('mainfile.zip', "rb") as action_zip:
+            action_bin = action_zip.read()
+#        action_bin = zf.read('__main__.py')
+
+            self.cf_client.create_action(self.package, action_name, docker_image_name, code=action_bin,
+                                     memory=memory, is_binary=True, timeout=timeout*1000)
+#        self._delete_function_handler_zip()
+        return runtime_meta
+
+    def dickle(self, base_runtime_docker_image, target_runtime_docker_image, function, modules, memory, timeout):
+        """
+        Updates base pywren runtime Docker image with function and dependencies and 
+        then pushes it to the Docker hub and updates runtime action in CF
+        """
+        logger.info('Building a function pywren runtime docker image based on runtime image {}'.format(base_runtime_docker_image))
+        logger.info('Target docker image name: {}'.format(target_runtime_docker_image))
+#        import pdb;pdb.set_trace()
+
+        create_function_handler_zip(ibmcf_config.FH_ZIP_LOCATION, '__main__.py', __file__)
+
+        if dockerfile:
+            cmd = 'DOCKER_BUILDKIT=1 docker build -t {} -f {} .'.format(docker_image_name, dockerfile)
+        else:
+            cmd = 'DOCKER_BUILDKIT=1 docker build -t {} .'.format(docker_image_name)
+
+        res = os.system(cmd)
+        if res != 0:
+            raise Exception('There was an error building the runtime')
+
+        cmd = 'docker push {}'.format(docker_image_name)
+        res = os.system(cmd)
+        if res != 0:
+            raise Exception('There was an error pushing the runtime to the container registry')
+
+        runtime_meta = self._generate_runtime_meta(docker_image_name)
+
+        logger.info('Creating new PyWren runtime based on Docker image {}'.format(docker_image_name))
+
+        self.cf_client.create_package(self.package)
+        action_name = self._format_action_name(docker_image_name, memory)
+
+#        import pdb;pdb.set_trace()
+        import zipfile
+        zf = zipfile.ZipFile(ibmcf_config.FH_ZIP_LOCATION)
+        action_bin = zf.read('__main__.py')
+
+        self.cf_client.create_action(self.package, action_name, docker_image_name, code=action_bin,
+                                     memory=memory, is_binary=True, timeout=timeout*1000)
+#        self._delete_function_handler_zip()
+        return runtime_meta
+
     def build_runtime(self, docker_image_name, dockerfile):
         """
         Builds a new runtime from a Docker file and pushes it to the Docker hub
@@ -159,6 +251,7 @@ class IBMCloudFunctionsBackend:
         if docker_image_name == 'default':
             docker_image_name = self._get_default_runtime_image_name()
 
+#        import pdb;pdb.set_trace()
         runtime_meta = self._generate_runtime_meta(docker_image_name)
 
         logger.info('Creating new PyWren runtime based on Docker image {}'.format(docker_image_name))
@@ -219,6 +312,7 @@ class IBMCloudFunctionsBackend:
         """
         Invoke -- return information about this invocation
         """
+#        import pdb;pdb.set_trace()
         action_name = self._format_action_name(docker_image_name, runtime_memory)
 
         activation_id = self.cf_client.invoke(package=self.package,

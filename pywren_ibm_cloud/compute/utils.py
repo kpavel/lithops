@@ -41,6 +41,19 @@ def create_function_handler_zip(zip_location, main_exec_file, backend_location):
             main_file = os.path.join(current_location, 'entry_point.py')
             pywren_zip.write(main_file, main_exec_file)
             add_folder_to_zip(pywren_zip, module_location)
+#        with zipfile.ZipFile(zip_location+'2', 'w', zipfile.ZIP_DEFLATED) as pywren_zip2:
+#            current_location = os.path.dirname(os.path.abspath(backend_location))
+#            main_file = os.path.join(current_location, 'entry_point.py')
+#            pywren_zip2.write(main_file, main_exec_file)
 
+    except Exception:
+        raise Exception('Unable to create the {} package: {}'.format(zip_location))
+
+def create_main_file_zip(zip_location, main_exec_file, backend_location):
+    try:
+        with zipfile.ZipFile(zip_location, 'w', zipfile.ZIP_DEFLATED) as pywren_zip:
+            current_location = os.path.dirname(os.path.abspath(backend_location))
+            main_file = os.path.join(current_location, 'entry_point.py')
+            pywren_zip.write(main_file, main_exec_file)
     except Exception:
         raise Exception('Unable to create the {} package: {}'.format(zip_location))

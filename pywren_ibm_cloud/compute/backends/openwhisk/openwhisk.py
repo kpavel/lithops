@@ -170,6 +170,7 @@ class OpenWhiskBackend:
         """
         Invoke -- return information about this invocation
         """
+#        import pdb;pdb.set_trace()
         action_name = self._format_action_name(docker_image_name, runtime_memory)
 
         activation_id = self.cf_client.invoke(self.package, action_name,

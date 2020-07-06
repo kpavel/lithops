@@ -296,6 +296,7 @@ class FunctionInvoker:
 
                 log_msg = ('ExecutorID {} | JobID {} - Starting function invocation: {}()  - Total: {} '
                            'activations'.format(job.executor_id, job.job_id, job.function_name, job.total_calls))
+#                import pdb;pdb.set_trace()
                 print(log_msg) if not self.log_level else logger.info(log_msg)
 
                 if self.ongoing_activations < self.workers:

@@ -180,6 +180,7 @@ def _create_job(config, internal_storage, executor_id, job_id, func, data, runti
 
     logger.debug('ExecutorID {} | JobID {} - Serializing function and data'.format(executor_id, job_id))
     serializer = SerializeIndependent(runtime_meta['preinstalls'])
+    import pdb;pdb.set_trace()
     func_and_data_ser, mod_paths = serializer([func] + data, inc_modules, exc_modules)
     data_strs = func_and_data_ser[1:]
     data_size_bytes = sum(len(x) for x in data_strs)
@@ -221,7 +222,12 @@ def _create_job(config, internal_storage, executor_id, job_id, func, data, runti
     func_upload_start = time.time()
     func_key = create_func_key(JOBS_PREFIX, executor_id, job_id)
     job_description['func_key'] = func_key
-    internal_storage.put_func(func_key, func_module_str)
+    
+    if False:
+        internal_storage.put_func(func_key, func_module_str)
+    else:
+        _inject_in_runtime_docker_image(job_description, func, mod_paths) 
+
     func_upload_end = time.time()
 
     host_job_meta['func_upload_time'] = round(func_upload_end - func_upload_start, 6)
@@ -230,6 +236,57 @@ def _create_job(config, internal_storage, executor_id, job_id, func, data, runti
 
     return job_description
 
+def _inject_in_runtime_docker_image(job_description, func, mod_paths):
+    import inspect
+    import tempfile
+    from distutils.dir_util import copy_tree
+    import shutil
+    import hashlib
+    
+    MOD_PATH='ext_mod_path'
+    if os.path.exists(MOD_PATH):
+        shutil.rmtree(MOD_PATH)
+
+    # Generate per function unique hashsum that will be used as runtime docker image tag
+    f_src = inspect.getsource(func)
+    func_file_name = hashlib.md5(f_src.encode('utf-8')).hexdigest()
+
+    base_docker_image=job_description['runtime_name']
+    ext_docker_image = "{}:{}".format(base_docker_image, func_file_name)
+    ext_docker_file = 'custom.dockerfile'
+
+    # Generate Dockerfile extended with function dependencies and function
+    with tempfile.TemporaryDirectory(MOD_PATH) as tmpdirname:
+        for module in mod_paths:
+            if os.path.isdir(module):
+                shutil.copytree(module, '{}/{}'.format(MOD_PATH, os.path.basename(module)))
+            else:
+                shutil.copy2(module, MOD_PATH)
+
+        source = inspect.getsource(func)
+   
+        with open('{}/{}.py'.format(MOD_PATH, func_file_name), 'w') as f:
+            f.write(source)
+
+        with open(ext_docker_file, 'w') as df:
+            df.write('\n'.join([
+                'FROM {}'.format(base_docker_image),
+                'ENV PYTHONPATH={}:${}'.format(MOD_PATH,'PYTHONPATH'),
+                'COPY {} {}'.format(MOD_PATH, MOD_PATH)
+            ]))
+
+    import pdb;pdb.set_trace()
+
+    # Call pywren cli to build new extended runtime tagged by function hash
+    from pywren_ibm_cloud.cli.runtime import build_and_create_runtime
+    build_and_create_runtime(ext_docker_image, ext_docker_file)
+
+    job_description['runtime_name'] = ext_docker_image
+
+    # save runtime details to metadata
+    # cleanup()
+       
+    return func_file_name
 
 def clean_job(jobs_to_clean, storage_config, clean_cloudobjects):
     """

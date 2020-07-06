@@ -61,6 +61,9 @@ class stats:
 class JobRunner:
 
     def __init__(self, jr_config, jobrunner_conn, internal_storage):
+
+        logger.info(f"Initing JobRunner!!! {jr_config}")
+
         self.jr_config = jr_config
         self.jobrunner_conn = jobrunner_conn
         self.internal_storage = internal_storage
@@ -248,13 +251,18 @@ class JobRunner:
         Runs the function
         """
         # self.stats.write('jobrunner_start', time.time())
-        logger.info("Started")
+        logger.info(f"Started 5 {os.environ}")
         result = None
         exception = False
         try:
-            loaded_func_all = self._get_function_and_modules()
-            self._save_modules(loaded_func_all['module_data'])
-            function = self._unpickle_function(loaded_func_all['func'])
+            function = None
+            if "FOO" in os.environ:
+                function = locate(os.environ["FOO"])
+            else:
+                loaded_func_all = self._get_function_and_modules()
+                self._save_modules(loaded_func_all['module_data'])
+                function = self._unpickle_function(loaded_func_all['func'])
+
             data = self._load_data()
 
             if strtobool(os.environ.get('__PW_REDUCE_JOB', 'False')):
