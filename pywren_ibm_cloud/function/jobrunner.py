@@ -137,6 +137,27 @@ class JobRunner:
 
         return loaded_func
 
+    def _load_data2(self):
+        extra_get_args = {}
+        if self.data_byte_range is not None:
+            range_str = 'bytes={}-{}'.format(*self.data_byte_range)
+            extra_get_args['Range'] = range_str
+
+        logger.debug("Getting function data from local pickled file")
+        data_download_start_tstamp = time.time()
+#        data_obj = self.internal_storage.get_data(self.data_key, extra_get_args=extra_get_args)
+        
+        data_obj = open(self.data_key, "rb").read()
+        
+        logger.debug("Finished getting Function data")
+        logger.debug("Unpickle Function data")
+        loaded_data = pickle.loads(data_obj)
+        logger.debug("Finished unpickle Function data")
+        data_download_end_tstamp = time.time()
+        self.stats.write('data_download_time', round(data_download_end_tstamp-data_download_start_tstamp, 8))
+
+        return loaded_data
+
     def _load_data(self):
         extra_get_args = {}
         if self.data_byte_range is not None:
@@ -251,22 +272,23 @@ class JobRunner:
         Runs the function
         """
         # self.stats.write('jobrunner_start', time.time())
-        logger.info(f"Started 7 {os.environ}")
+        logger.info(f"Started 8 {os.environ}")
         result = None
         exception = False
         try:
             function = None
+            data = None
             if "FOO" in os.environ:
                 #function = locate(os.environ["FOO"])
                 logger.info(f"Loading pickled funcion from file {self.func_key}")
                 pickled_func = open(self.func_key, "rb").read()
                 function = self._unpickle_function(pickled_func)
+                data = self._load_data2()
             else:
                 loaded_func_all = self._get_function_and_modules()
                 self._save_modules(loaded_func_all['module_data'])
                 function = self._unpickle_function(loaded_func_all['func'])
-
-            data = self._load_data()
+                data = self._load_data()
 
             if strtobool(os.environ.get('__PW_REDUCE_JOB', 'False')):
                 self._wait_futures(data)

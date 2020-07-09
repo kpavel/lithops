@@ -100,6 +100,7 @@ class FunctionExecutor:
                 raise Exception("You cannot use rabbitmq_mnonitor since 'amqp_url'"
                                 " is not present in configuration")
 
+#        import pdb;pdb.set_trace()
         storage_config = extract_storage_config(self.config)
         self.internal_storage = InternalStorage(storage_config)
         self.invoker = FunctionInvoker(self.config, self.executor_id, self.internal_storage)

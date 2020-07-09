@@ -28,6 +28,9 @@ from pywren_ibm_cloud.utils import is_object_processing_function, sizeof_fmt
 from pywren_ibm_cloud.storage.utils import create_func_key, create_agg_data_key
 from pywren_ibm_cloud.job.serialize import SerializeIndependent, create_module_data
 from pywren_ibm_cloud.config import MAX_AGG_DATA_SIZE, JOBS_PREFIX
+from pywren_ibm_cloud.storage import InternalStorage
+
+import hashlib
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +133,10 @@ def _create_job(config, internal_storage, executor_id, job_id, func, data, runti
     :return: A list with size `len(iterdata)` of futures for each job
     :rtype:  list of futures.
     """
+    ext_runtime_storage_config = config.get('ext_runtime', {})
+    if ext_runtime_storage_config:
+        internal_storage = InternalStorage(ext_runtime_storage_config)
+
     log_level = os.getenv('PYWREN_LOGLEVEL')
 
     runtime_name = config['pywren']['runtime']
@@ -180,14 +187,43 @@ def _create_job(config, internal_storage, executor_id, job_id, func, data, runti
 
     logger.debug('ExecutorID {} | JobID {} - Serializing function and data'.format(executor_id, job_id))
     serializer = SerializeIndependent(runtime_meta['preinstalls'])
-    import pdb;pdb.set_trace()
     func_and_data_ser, mod_paths = serializer([func] + data, inc_modules, exc_modules)
-    data_strs = func_and_data_ser[1:]
-    data_size_bytes = sum(len(x) for x in data_strs)
+
+    import pdb;pdb.set_trace()
+
     module_data = create_module_data(mod_paths)
+    data_strs = func_and_data_ser[1:]
+    data_size_bytes = sum(len(x) for x in data_strs) #TODO: do we need it? compare with one below
+    data_bytes, data_ranges = utils.agg_data(data_strs)
+    data_size_bytes = len(data_bytes) #TODO remove if not needed
+    
+    # Generate function + data unique identifier
+    uuid = _gen_uuid(func_and_data_ser, module_data) 
+
+    _store_data(internal_storage, job_description, data_strs, uuid) 
+    
     func_str = func_and_data_ser[0]
     func_module_str = pickle.dumps({'func': func_str, 'module_data': module_data}, -1)
+
+    _validate_size(config, func_module_str, data_bytes, host_job_meta)
+
+    log_msg = ('ExecutorID {} | JobID {} - Uploading function and data '
+               '- Total: {}'.format(executor_id, job_id, total_size))
+    print(log_msg) if not log_level else logger.info(log_msg)
+
+    import pdb;pdb.set_trace()
+    _store_func_and_modules(internal_storage, job_description, func_module_str, uuid, host_job_meta)
+
+    if ext_runtime_storage_config:
+        _update_runtime(job_description, , data_strs, mod_paths, module_data) 
+
+    job_description['metadata'] = host_job_meta
+    return job_description
+
+def _validate_size(config, func_module_str, data_bytes, host_job_meta):
+    data_size_bytes = len(data_bytes)
     func_module_size_bytes = len(func_module_str)
+
     total_size = utils.sizeof_fmt(data_size_bytes+func_module_size_bytes)
 
     host_job_meta['data_size_bytes'] = data_size_bytes
@@ -203,47 +239,137 @@ def _create_job(config, internal_storage, executor_id, job_id, func, data, runti
                    'of {}'.format(executor_id, job_id, sizeof_fmt(data_limit*1024**2)))
         raise Exception(log_msg)
 
-    log_msg = ('ExecutorID {} | JobID {} - Uploading function and data '
-               '- Total: {}'.format(executor_id, job_id, total_size))
-    print(log_msg) if not log_level else logger.info(log_msg)
+def _gen_uuid(func_and_data_ser, module_data):
+    return hashlib.md5(func_and_data_ser[0]+func_and_data_ser[1]+pickle.dumps(module_data)).hexdigest()
 
-    # Upload data
-    data_key = create_agg_data_key(JOBS_PREFIX, executor_id, job_id)
-    job_description['data_key'] = data_key
+def _store_data(internal_storage, job_description, data_bytes, data_ranges, uuid):
+    data_key = create_agg_data_key(JOBS_PREFIX, uuid, "")
     data_bytes, data_ranges = utils.agg_data(data_strs)
-    job_description['data_ranges'] = data_ranges
-    data_upload_start = time.time()
+    
+    data_upload_start = time.time() 
     internal_storage.put_data(data_key, data_bytes)
     data_upload_end = time.time()
 
     host_job_meta['data_upload_time'] = round(data_upload_end-data_upload_start, 6)
-
-    # Upload function and modules
-    func_upload_start = time.time()
-    func_key = create_func_key(JOBS_PREFIX, executor_id, job_id)
-    job_description['func_key'] = func_key
     
-    if False:
-        internal_storage.put_func(func_key, func_module_str)
-    else:
-        job_description['func_key'] = _inject_in_runtime_docker_image(job_description, func_str, mod_paths, module_data) 
+    job_description['data_key'] = data_key
+    job_description['data_ranges'] = data_ranges
 
+def _store_func_and_modules(internal_storage, job_description, func_str, func_module_str, uuid, host_job_meta):
+    func_key = create_func_key(JOBS_PREFIX, uuid, "")
+
+    func_upload_start = time.time()
+
+    if config.get('ext_runtime', {}):
+        internal_storage.put_func(func_key, func_str)
+    else:
+        internal_storage.put_func(func_key, func_module_str)
+
+    job_description['func_key'] = data_key
     func_upload_end = time.time()
 
-    host_job_meta['func_upload_time'] = round(func_upload_end - func_upload_start, 6)
+    host_job_meta['func_upload_time'] = round(func_upload_end - func_upload_start, 6) 
 
-    job_description['metadata'] = host_job_meta
-
-    return job_description
-
-def _inject_in_runtime_docker_image(job_description, func_str, mod_paths, module_data):
+######################################################################################################
+# At this point we have the function, modules and data stored under some folder in our filesystem
+# The following will be executed only once per runtime version
+#
+# Pickle function inside /{uuid}/function.pickle and add it to Dockerfile. Update its path in func_key
+# Copy unpickled modules to /uuid/modules/ directory to Dockerfile and update mod_key
+# Copy unpickled data to /uuid/data directory to Dockerfile and update data_key
+# Build docker image and register runtime using build_and_create_runtime function
+def _update_runtime(job_description, func_str, module_data, uuid):
     import inspect
     import tempfile
     from distutils.dir_util import copy_tree
     import shutil
-    import hashlib
-    
-    MOD_PATH='ext_mod_path'
+
+    # simple check that the image already present in the local docker registry
+    # TODO: move higher in the flow, no need to do almost anything if it is there
+    cmd = 'DOCKER_BUILDKIT=1 docker inspect {}'.format(ext_docker_image)
+    if os.system(cmd) == 0:
+#TODO: fix
+        job_description['func_key'] = "/{}".format(func_key)
+        return 
+
+    RUNTIME_UNIQUE_DIR = '/'.join([JOBS_PREFIX, uuid])
+
+    # relative pickled function file path
+    new_func_key = '/'.join([RUNTIME_UNIQUE_DIR, func_uuid, '.pickle'])
+
+    # simple check that the image already present in the local docker registry
+    # TODO: move higher in the flow, right after we have uuid, no need to do almost anything if it is there
+    # TODO: consider to store extended pywren runtime details in metadata later.
+    cmd = 'DOCKER_BUILDKIT=1 docker inspect {}'.format(ext_docker_image)
+    if os.system(cmd) == 0:
+        job_description['func_key'] = "/{}".format(new_func_key)
+        return
+
+    # clean the local temporary modules folder
+    if os.path.exists(RUNTIME_UNIQUE_DIR):
+      if os.path.isdir(RUNTIME_UNIQUE_DIR):
+        shutil.rmtree(RUNTIME_UNIQUE_DIR)
+      else:
+        os.remove(RUNTIME_UNIQUE_DIR)
+
+    # unpickle pickled modules
+    MODULES = '/'.join([RUNTIME_UNIQUE_DIR, 'modules'])
+    _save_modules(module_data, MODULES)
+
+    base_docker_image = job_description['runtime_name']
+    ext_docker_image = "{}:{}".format(base_docker_image, uuid)
+
+    # update job with new extended runtime name
+    job_description['runtime_name'] = ext_docker_image
+
+#    import pdb;pdb.set_trace()
+
+    ext_docker_file = "{}:{}".format(uuid, '.dockerfile')
+
+    # Generate Dockerfile extended with function dependencies and function
+    os.makedirs(MODULES, exist_ok=True)
+
+    with open(ext_docker_file, 'w') as df:
+            df.write('\n'.join([
+                'FROM {}'.format(base_docker_image),
+                'ENV PYTHONPATH=/{}:${}'.format(MODULES,'PYTHONPATH'), # set python path to point to dependencies folder
+                'COPY {} /{}'.format(MODULES, MODULES),
+                'COPY {} /{}'.format(JOBS_PREFIX, JOBS_PREFIX)
+            ]))
+
+    # Call pywren cli to build new extended runtime tagged by function hash
+    from pywren_ibm_cloud.cli.runtime import build_and_create_runtime
+    build_and_create_runtime(ext_docker_image, ext_docker_file)
+
+    job_description['runtime_name'] = ext_docker_image
+
+    # save runtime details to metadata
+    # cleanup()
+
+    # return the path to the function in the runtime docker image
+    job_description['func_key'] = "/{}".format(func_key)
+
+def _inject_in_runtime_docker_image(job_description, func_str, module_data):
+    import inspect
+    import tempfile
+    from distutils.dir_util import copy_tree
+    import shutil
+
+    func_uuid = hashlib.md5(func_str).hexdigest()
+
+    base_docker_image = job_description['runtime_name']
+    ext_docker_image = "{}:{}".format(base_docker_image, func_uuid)
+
+    # update job with new extended runtime name
+    job_description['runtime_name'] = ext_docker_image
+
+    MOD_PATH = 'ext_mod_path'
+
+    # relative pickled function file path
+    func_key = '{}/{}.pkl'.format(MOD_PATH, func_uuid)
+
+    # TODO: consider to store extended pywren runtime details in metadata later.
+
     if os.path.exists(MOD_PATH):
       if os.path.isdir(MOD_PATH):
         shutil.rmtree(MOD_PATH)
@@ -253,11 +379,7 @@ def _inject_in_runtime_docker_image(job_description, func_str, mod_paths, module
     # Generate per function unique hashsum that will be used as runtime docker image tag
 #    f_src = inspect.getsource(func)
 #    import pdb;pdb.set_trace()
-    func_uuid = hashlib.md5(func_str).hexdigest()
-    func_key = '{}/{}.pkl'.format(MOD_PATH, func_uuid)
 
-    base_docker_image=job_description['runtime_name']
-    ext_docker_image = "{}:{}".format(base_docker_image, func_uuid)
     ext_docker_file = 'custom.dockerfile'
 
     # Generate Dockerfile extended with function dependencies and function
@@ -279,7 +401,8 @@ def _inject_in_runtime_docker_image(job_description, func_str, mod_paths, module
             df.write('\n'.join([
                 'FROM {}'.format(base_docker_image),
                 'ENV PYTHONPATH=/{}:${}'.format(MOD_PATH,'PYTHONPATH'),
-                'COPY {} /{}'.format(MOD_PATH, MOD_PATH)
+                'COPY {} /{}'.format(MOD_PATH, MOD_PATH),
+                'COPY {} /{}'.format(JOBS_PREFIX, JOBS_PREFIX)
             ]))
 
     # Call pywren cli to build new extended runtime tagged by function hash
@@ -290,7 +413,8 @@ def _inject_in_runtime_docker_image(job_description, func_str, mod_paths, module
 
     # save runtime details to metadata
     # cleanup()
-       
+    
+    # return the path to the function in the runtime docker image   
     return "/{}".format(func_key)
 
 def _save_modules(module_data, module_path):
@@ -298,7 +422,7 @@ def _save_modules(module_data, module_path):
     Save modules in the docker image
     """
     from pywren_ibm_cloud.utils import b64str_to_bytes
-    import pdb;pdb.set_trace()    
+#    import pdb;pdb.set_trace()    
     if module_data:
         logger.debug("Writing Function dependencies to local disk")
 #        os.makedirs(module_path, exist_ok=True)

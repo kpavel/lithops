@@ -28,7 +28,7 @@ STORAGE_BACKEND_DEFAULT = 'ibm_cos'
 
 STORAGE_BASE_FOLDER = "pywren-data"
 DOCKER_BASE_FOLDER = "pywren-docker"
-TEMP = os.path.realpath(tempfile.gettempdir())
+TEMP = os.getenv('PYWREN_TEMP_FOLDER', os.path.realpath(tempfile.gettempdir()))
 STORAGE_FOLDER = os.path.join(TEMP, STORAGE_BASE_FOLDER)
 DOCKER_FOLDER = os.path.join(TEMP, DOCKER_BASE_FOLDER)
 

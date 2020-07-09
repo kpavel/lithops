@@ -40,7 +40,7 @@ class LocalhostStorageBackend:
 
         return LocalhostBoto3Client(self)
 
-    def put_object(self, bucket_name, key, data):
+    def put_object(self, bucket_name, key, data, storage_folder=STORAGE_FOLDER):
         """
         Put an object in localhost filesystem.
         Override the object if the key already exists.
@@ -49,9 +49,10 @@ class LocalhostStorageBackend:
         :type data: str/bytes
         :return: None
         """
+        import pdb;pdb.set_trace()
         try:
             data_type = type(data)
-            file_path = os.path.join(STORAGE_FOLDER, bucket_name, key)
+            file_path = os.path.join(storage_folder, bucket_name, key)
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
             if data_type == bytes:
                 with open(file_path, "wb") as f:
@@ -62,7 +63,7 @@ class LocalhostStorageBackend:
         except Exception as e:
             raise(e)
 
-    def get_object(self, bucket_name, key, stream=False, extra_get_args={}):
+    def get_object(self, bucket_name, key, stream=False, extra_get_args={}, storage_folder=STORAGE_FOLDER):
         """
         Get object from localhost filesystem with a key.
         Throws StorageNoSuchKeyError if the given key does not exist.
@@ -72,7 +73,7 @@ class LocalhostStorageBackend:
         """
         buffer = None
         try:
-            file_path = os.path.join(STORAGE_FOLDER, bucket_name, key)
+            file_path = os.path.join(storage_folder, bucket_name, key)
             with open(file_path, "rb") as f:
                 if 'Range' in extra_get_args:
                     byte_range = extra_get_args['Range'].replace('bytes=', '')
@@ -86,7 +87,7 @@ class LocalhostStorageBackend:
             else:
                 return buffer.read()
         except Exception:
-            raise StorageNoSuchKeyError(os.path.join(STORAGE_FOLDER, bucket_name), key)
+            raise StorageNoSuchKeyError(os.path.join(storage_folder, bucket_name), key)
 
     def head_object(self, bucket_name, key):
         """
@@ -98,20 +99,20 @@ class LocalhostStorageBackend:
         """
         pass
 
-    def delete_object(self, bucket_name, key):
+    def delete_object(self, bucket_name, key, storage_folder=STORAGE_FOLDER):
         """
         Delete an object from storage.
         :param bucket: bucket name
         :param key: data key
         """
-        file_path = os.path.join(STORAGE_FOLDER, bucket_name, key)
+        file_path = os.path.join(storage_folder, bucket_name, key)
         try:
             if os.path.exists(file_path):
                 os.remove(file_path)
         except Exception:
             pass
 
-    def delete_objects(self, bucket_name, key_list):
+    def delete_objects(self, bucket_name, key_list, storage_folder=STORAGE_FOLDER):
         """
         Delete a list of objects from storage.
         :param bucket: bucket name
@@ -125,7 +126,7 @@ class LocalhostStorageBackend:
             self.delete_object(bucket_name, key)
 
         for file_dir in dirs:
-            shutil.rmtree(os.path.join(STORAGE_FOLDER, file_dir), ignore_errors=True)
+            shutil.rmtree(os.path.join(storage_folder, file_dir), ignore_errors=True)
 
     def bucket_exists(self, bucket_name):
         """
@@ -145,7 +146,7 @@ class LocalhostStorageBackend:
         """
         raise NotImplementedError
 
-    def list_objects(self, bucket_name, prefix=None):
+    def list_objects(self, bucket_name, prefix=None, storage_folder=STORAGE_FOLDER):
         """
         Return a list of objects for the prefix.
         :param bucket_name: Name of the bucket.
@@ -156,9 +157,9 @@ class LocalhostStorageBackend:
         key_list = []
 
         if prefix:
-            root = os.path.join(STORAGE_FOLDER, bucket_name, prefix)
+            root = os.path.join(storage_folder, bucket_name, prefix)
         else:
-            root = os.path.join(STORAGE_FOLDER, bucket_name)
+            root = os.path.join(storage_folder, bucket_name)
 
         for path, subdirs, files in os.walk(root):
             for name in files:
@@ -170,7 +171,7 @@ class LocalhostStorageBackend:
 
         return key_list
 
-    def list_keys(self, bucket_name, prefix=None):
+    def list_keys(self, bucket_name, prefix=None, storage_folder=STORAGE_FOLDER):
         """
         Return a list of keys for the given prefix.
         :param bucket_name: Name of the bucket.
@@ -181,9 +182,9 @@ class LocalhostStorageBackend:
         key_list = []
 
         if prefix:
-            root = os.path.join(STORAGE_FOLDER, bucket_name, prefix)
+            root = os.path.join(storage_folder, bucket_name, prefix)
         else:
-            root = os.path.join(STORAGE_FOLDER, bucket_name)
+            root = os.path.join(storage_folder, bucket_name)
 
         for path, subdirs, files in os.walk(root):
             for name in files:
