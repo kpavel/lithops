@@ -37,6 +37,8 @@ from pywren_ibm_cloud.config import cloud_logging_config
 
 from pydoc import locate
 
+from pywren_ibm_cloud.storage import InternalStorage
+
 pickling_support.install()
 logger = logging.getLogger('JobRunner')
 
@@ -82,7 +84,7 @@ class JobRunner:
         self.stats = stats(self.jr_config['stats_filename'])
 
         self.ext_internal_storage = None
-        ext_runtime_storage_config = config.get('ext_runtime', {})
+        ext_runtime_storage_config = self.pywren_config.get('ext_runtime', {})
         if ext_runtime_storage_config:
             self.ext_internal_storage = InternalStorage(ext_runtime_storage_config)
 
@@ -175,7 +177,11 @@ class JobRunner:
 
         logger.debug("Getting function data")
         data_download_start_tstamp = time.time()
-        data_obj = self.internal_storage.get_data(self.data_key, extra_get_args=extra_get_args)
+        
+        if self.ext_internal_storage:
+            data_obj = self.ext_internal_storage.get_data(self.data_key, extra_get_args=extra_get_args)
+        else: 
+            data_obj = self.internal_storage.get_data(self.data_key, extra_get_args=extra_get_args)
         logger.debug("Finished getting Function data")
         logger.debug("Unpickle Function data")
         loaded_data = pickle.loads(data_obj)
@@ -281,7 +287,7 @@ class JobRunner:
         Runs the function
         """
         # self.stats.write('jobrunner_start', time.time())
-        logger.info(f"Started 12 {os.environ}")
+        logger.info(f"Started 13")
         result = None
         exception = False
         try:

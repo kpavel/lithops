@@ -17,7 +17,7 @@ def runtime(ctx):
 def build_and_create(image_name, memory, file):
     logging.basicConfig(level=logging.DEBUG)
     os.environ["PYWREN_LOGLEVEL"] = 'DEBUG'
-    build_and_create_runtime(image_name, file, memory=memory)
+    build_and_create_runtime(image_name, file, memory=memory, is_base_image=True)
 
 @runtime.command('create')
 @click.argument('image_name')

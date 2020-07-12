@@ -24,6 +24,7 @@ import http.client
 from urllib.parse import urlparse
 from urllib3.exceptions import InsecureRequestWarning
 
+import time
 
 urllib3.disable_warnings(InsecureRequestWarning)
 logger = logging.getLogger(__name__)
@@ -94,7 +95,10 @@ class OpenWhiskClient:
         url = '/'.join([self.endpoint, 'api', 'v1', 'namespaces', self.namespace, 'actions', package,
                         action_name + "?overwrite=" + str(overwrite)])
 
-#        import pdb;pdb.set_trace()
+        #import pdb;pdb.set_trace()
+   
+        data['annotations'] = [{"key": "dummy", "value": time.time()}]
+
         res = self.session.put(url, json=data)
         resp_text = res.json()
 

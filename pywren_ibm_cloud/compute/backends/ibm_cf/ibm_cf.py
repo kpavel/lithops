@@ -132,13 +132,22 @@ class IBMCloudFunctionsBackend:
     def _delete_function_handler_zip(self):
         os.remove(ibmcf_config.FH_ZIP_LOCATION)
 
-    def build_and_create_runtime(self, docker_image_name, dockerfile, memory, timeout):
+    def build_and_create_runtime(self, docker_image_name, dockerfile, memory, timeout, is_base_image=False):
         """
         Builds a new base runtime from a Docker file, pushes it to the Docker hub and registers
         runtime action in CF
         """
         logger.info('Building a new pywren runtime docker image from Dockerfile')
         logger.info('Target docker image name: {}'.format(docker_image_name))
+
+
+        # remove all the child runtimes. comsider to hold this information in the meta
+#        import pdb;pdb.set_trace()
+        if is_base_image:
+            for runtime in self.list_runtimes():
+                if runtime[0].split(":")[0] == docker_image_name.split(":")[0]:
+                    self.delete_runtime(runtime[0], runtime[1])
+                
 #        import pdb;pdb.set_trace()
 
         create_function_handler_zip(ibmcf_config.FH_ZIP_LOCATION, '__main__.py', __file__)
@@ -157,7 +166,7 @@ class IBMCloudFunctionsBackend:
         if res != 0:
             raise Exception('There was an error pushing the runtime to the container registry')
 
-#        import pdb;pdb.set_trace()
+        import pdb;pdb.set_trace()
         runtime_meta = self._generate_runtime_meta(docker_image_name)
 
         logger.info('Creating new PyWren runtime based on Docker image {}'.format(docker_image_name))
@@ -276,6 +285,16 @@ class IBMCloudFunctionsBackend:
             docker_image_name = self._get_default_runtime_image_name()
         action_name = self._format_action_name(docker_image_name, memory)
         self.cf_client.delete_action(self.package, action_name)
+
+    def get_runtime(self, docker_image_name, memory):
+        """
+        Gets a runtime
+        """
+#        import pdb;pdb.set_trace()
+        if docker_image_name == 'default':
+            docker_image_name = self._get_default_runtime_image_name()
+        action_name = self._format_action_name(docker_image_name, memory)
+        return self.cf_client.get_action(self.package, action_name)
 
     def delete_all_runtimes(self):
         """

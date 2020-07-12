@@ -168,6 +168,8 @@ def _create_job(config, internal_storage, executor_id, job_id, func, data, runti
     exclude_modules_cfg = config['pywren'].get('exclude_modules', [])
     include_modules_cfg = config['pywren'].get('include_modules', [])
 
+#    import pdb;pdb.set_trace()
+
     exc_modules = set()
     inc_modules = set()
     if exclude_modules_cfg:
@@ -242,7 +244,7 @@ def _store_data(internal_storage, job_description, data_bytes, data_ranges, uuid
     data_key = create_agg_data_key(JOBS_PREFIX, uuid, "")
     
     data_upload_start = time.time() 
-    import pdb;pdb.set_trace()
+#    import pdb;pdb.set_trace()
     internal_storage.put_data(data_key, data_bytes)
     
     data_byte_range = [28, 55]
@@ -281,6 +283,8 @@ def _store_func_and_modules(config, internal_storage, job_description, func_str,
 # Copy unpickled data to /uuid/data directory to Dockerfile and update data_key
 # Build docker image and register runtime using build_and_create_runtime function
 def _update_runtime(job_description, module_data, uuid):
+    from pywren_ibm_cloud.cli.runtime import build_and_create_runtime, get_runtime
+
     base_docker_image = job_description['runtime_name']
     ext_docker_image = "{}:{}".format(base_docker_image, uuid)
 
@@ -290,10 +294,17 @@ def _update_runtime(job_description, module_data, uuid):
     # simple check that the image already present in the local docker registry
     # TODO: move higher in the flow, no need to do almost anything if it is there
     # TODO: consider to store extended pywren runtime details in metadata later.
-    cmd = 'DOCKER_BUILDKIT=1 docker inspect {}'.format(ext_docker_image)
+    
+#    import pdb;pdb.set_trace()
 
-    if os.system(cmd) == 0:
-        return 
+    runtime = get_runtime(ext_docker_image, memory=job_description['runtime_memory'])
+    if 'error' not in runtime:
+        return
+
+    #cmd = 'DOCKER_BUILDKIT=1 docker inspect {}'.format(ext_docker_image)
+   
+    #if os.system(cmd) == 0:
+    #    return 
 
     UUID_DIR = '/'.join([STORAGE_BASE_FOLDER, os.path.dirname(job_description['func_key'])])
 
@@ -307,13 +318,13 @@ def _update_runtime(job_description, module_data, uuid):
     with open(ext_docker_file, 'w') as df:
             df.write('\n'.join([
                 'FROM {}'.format(base_docker_image),
+                'ENV PYWREN_TEMP_FOLDER="/"',
                 'ENV PYTHONPATH=/{}:${}'.format(MODULES,'PYTHONPATH'), # set python path to point to dependencies folder
                 'COPY {} /{}'.format(UUID_DIR, UUID_DIR)
             ]))
 
-    import pdb;pdb.set_trace()
+#    import pdb;pdb.set_trace()
     # Call pywren cli to build new extended runtime tagged by function hash
-    from pywren_ibm_cloud.cli.runtime import build_and_create_runtime
     build_and_create_runtime(ext_docker_image, ext_docker_file)
 
 def _inject_in_runtime_docker_image(job_description, func_str, module_data):

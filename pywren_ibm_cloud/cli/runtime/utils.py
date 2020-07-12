@@ -22,7 +22,7 @@ from pywren_ibm_cloud.config import default_config, extract_storage_config, extr
 
 logger = logging.getLogger(__name__)
 
-def build_and_create_runtime(name, file, memory=None, config=None):
+def build_and_create_runtime(name, file, memory=None, config=None, is_base_image=False):
     config = default_config(config)
     storage_config = extract_storage_config(config)
     internal_storage = InternalStorage(storage_config)
@@ -35,7 +35,7 @@ def build_and_create_runtime(name, file, memory=None, config=None):
     logger.info('Creating runtime: {}, memory: {}'.format(name, memory))
 
     runtime_key = compute_handler.get_runtime_key(name, memory)
-    runtime_meta = compute_handler.build_and_create_runtime(name, file, memory, timeout)
+    runtime_meta = compute_handler.build_and_create_runtime(name, file, memory, timeout, is_base_image)
 
     try:
 #        import pdb;pdb.set_trace()
@@ -43,6 +43,15 @@ def build_and_create_runtime(name, file, memory=None, config=None):
     except Exception:
         raise("Unable to upload 'preinstalled-modules' file into {}".format(internal_storage.backend))
 
+def get_runtime(name, memory=None, config=None):
+    config = default_config(config)
+    storage_config = extract_storage_config(config)
+    internal_storage = InternalStorage(storage_config)
+    compute_config = extract_compute_config(config)
+    compute_handler = Compute(compute_config)
+
+    runtime = compute_handler.get_runtime(name, memory)
+    return runtime
 
 def create_runtime(name, memory=None, config=None):
     config = default_config(config)
