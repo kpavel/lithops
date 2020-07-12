@@ -13,6 +13,6 @@ def hello(name):
 pw = pywren.ibm_cf_executor()
 #import pdb;pdb.set_trace()
 
-#pw.map(hello, ["aaa", "bbb"], extra_env = {'FOO': 'test3.hello'})
-pw.call_async(hello, 'World', extra_env = {"FOO": 'pywren_ibm_cloud.test4.hello'})
+pw.map(hello, ["aaa", "bbb"], extra_env = {'FOO': 'test3.hello'})
+#pw.call_async(hello, 'World', extra_env = {"FOO": 'pywren_ibm_cloud.test4.hello'})
 print(pw.get_result())

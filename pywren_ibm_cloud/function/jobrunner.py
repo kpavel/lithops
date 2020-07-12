@@ -81,13 +81,22 @@ class JobRunner:
 
         self.stats = stats(self.jr_config['stats_filename'])
 
+        self.ext_internal_storage = None
+        ext_runtime_storage_config = config.get('ext_runtime', {})
+        if ext_runtime_storage_config:
+            self.ext_internal_storage = InternalStorage(ext_runtime_storage_config)
+
     def _get_function_and_modules(self):
         """
         Gets and unpickles function and modules from storage
         """
         logger.debug("Getting function and modules")
         func_download_start_tstamp = time.time()
-        func_obj = self.internal_storage.get_func(self.func_key)
+        func_obj = None
+        if self.ext_internal_storage:
+            func_obj = self.ext_internal_storage.get_func(self.func_key)
+        else:
+            func_obj = self.internal_storage.get_func(self.func_key)
         loaded_func_all = pickle.loads(func_obj)
         func_download_end_tstamp = time.time()
         self.stats.write('function_download_time', round(func_download_end_tstamp-func_download_start_tstamp, 8))
@@ -272,23 +281,20 @@ class JobRunner:
         Runs the function
         """
         # self.stats.write('jobrunner_start', time.time())
-        logger.info(f"Started 8 {os.environ}")
+        logger.info(f"Started 12 {os.environ}")
         result = None
         exception = False
         try:
             function = None
             data = None
-            if "FOO" in os.environ:
-                #function = locate(os.environ["FOO"])
-                logger.info(f"Loading pickled funcion from file {self.func_key}")
-                pickled_func = open(self.func_key, "rb").read()
-                function = self._unpickle_function(pickled_func)
-                data = self._load_data2()
+   
+            if self.ext_internal_storage:
+                function = self._get_function_and_modules()
             else:
                 loaded_func_all = self._get_function_and_modules()
                 self._save_modules(loaded_func_all['module_data'])
                 function = self._unpickle_function(loaded_func_all['func'])
-                data = self._load_data()
+            data = self._load_data()
 
             if strtobool(os.environ.get('__PW_REDUCE_JOB', 'False')):
                 self._wait_futures(data)
