@@ -166,7 +166,7 @@ class IBMCloudFunctionsBackend:
         if res != 0:
             raise Exception('There was an error pushing the runtime to the container registry')
 
-        import pdb;pdb.set_trace()
+#        import pdb;pdb.set_trace()
         runtime_meta = self._generate_runtime_meta(docker_image_name)
 
         logger.info('Creating new PyWren runtime based on Docker image {}'.format(docker_image_name))

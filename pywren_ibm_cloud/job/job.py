@@ -192,15 +192,15 @@ def _create_job(config, internal_storage, executor_id, job_id, func, data, runti
     func_and_data_ser, mod_paths = serializer([func] + data, inc_modules, exc_modules)
 
     module_data = create_module_data(mod_paths)
-    data_strs = func_and_data_ser[1:]
-    data_bytes, data_ranges = utils.agg_data(data_strs)
+    data_bytes, data_ranges = utils.agg_data(func_and_data_ser[1:])
+    func_str = func_and_data_ser[0]
     
     # Generate function + data unique identifier
-    uuid = _gen_uuid(func_and_data_ser, module_data) 
+#    import pdb;pdb.set_trace()
+    uuid = _gen_uuid(func_str, data_bytes, module_data) 
 
     _store_data(internal_storage, job_description, data_bytes, data_ranges, uuid, host_job_meta) 
     
-    func_str = func_and_data_ser[0]
     func_module_str = pickle.dumps({'func': func_str, 'module_data': module_data}, -1)
 
     total_size = _validate_size(config, func_module_str, data_bytes, host_job_meta)
@@ -237,8 +237,8 @@ def _validate_size(config, func_module_str, data_bytes, host_job_meta):
 
     return total_size
 
-def _gen_uuid(func_and_data_ser, module_data):
-    return hashlib.md5(func_and_data_ser[0]+func_and_data_ser[1]+pickle.dumps(module_data)).hexdigest()
+def _gen_uuid(func_str, data_bytes, module_data):
+    return hashlib.md5(func_str + data_bytes + pickle.dumps(module_data)).hexdigest()
 
 def _store_data(internal_storage, job_description, data_bytes, data_ranges, uuid, host_job_meta):
     data_key = create_agg_data_key(JOBS_PREFIX, uuid, "")
