@@ -2,17 +2,17 @@ def load_config(config_data):
     if 'ibm_cos' not in config_data:
         raise Exception("ibm_cos section is mandatory in the configuration")
 
-    if config_data['pywren']['compute_backend'] == 'ibm_cf':
+#    if config_data['pywren']['compute_backend'] == 'ibm_cf':
         # Private endpoint is mandatory when using IBM CF
-        if 'private_endpoint' not in config_data['ibm_cos']:
-            raise Exception('You must provide the private_endpoint to access to IBM COS')
-        elif 'private' not in config_data['ibm_cos']['private_endpoint']:
-            raise Exception('The private_endpoint you provided to access to IBM COS is not valid')
-        if not config_data['ibm_cos']['private_endpoint'].startswith('http'):
-            raise Exception('IBM COS Private Endpoint must start with http:// or https://')
+#        if 'private_endpoint' not in config_data['ibm_cos']:
+#            raise Exception('You must provide the private_endpoint to access to IBM COS')
+#        elif 'private' not in config_data['ibm_cos']['private_endpoint']:
+#            raise Exception('The private_endpoint you provided to access to IBM COS is not valid')
+#        if not config_data['ibm_cos']['private_endpoint'].startswith('http'):
+#            raise Exception('IBM COS Private Endpoint must start with http:// or https://')
 
-    elif 'private_endpoint' in config_data['ibm_cos']:
-        del config_data['ibm_cos']['private_endpoint']
+#    elif 'private_endpoint' in config_data['ibm_cos']:
+#        del config_data['ibm_cos']['private_endpoint']
 
     required_keys_1 = ('endpoint', 'api_key')
     required_keys_2 = ('endpoint', 'secret_key', 'access_key')

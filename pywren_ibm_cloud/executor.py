@@ -170,7 +170,7 @@ class FunctionExecutor:
         self.last_call = 'map'
 
         runtime_meta = self.invoker.select_runtime(job_id, runtime_memory)
-
+    
         job = create_map_job(self.config, self.internal_storage,
                              self.executor_id, job_id,
                              map_function=map_function,
@@ -185,7 +185,7 @@ class FunctionExecutor:
                              include_modules=include_modules,
                              exclude_modules=exclude_modules,
                              execution_timeout=timeout)
-
+        
         futures = self.invoker.run(job)
         self.futures.extend(futures)
         self._state = FunctionExecutor.State.Running
@@ -380,7 +380,7 @@ class FunctionExecutor:
 
         return fs_done, fs_notdone
 
-    def get_result(self, fs=None, throw_except=True, timeout=None, THREADPOOL_SIZE=128, WAIT_DUR_SEC=1):
+    def get_result(self, fs=None, throw_except=True, timeout=None, download_results=True, THREADPOOL_SIZE=128, WAIT_DUR_SEC=1):
         """
         For getting the results from all function activations
 
@@ -394,7 +394,7 @@ class FunctionExecutor:
         :return: The result of the future/s
         """
         fs_done, unused_fs_notdone = self.wait(fs=fs, throw_except=throw_except,
-                                               timeout=timeout, download_results=True,
+                                               timeout=timeout, download_results=download_results,
                                                THREADPOOL_SIZE=THREADPOOL_SIZE,
                                                WAIT_DUR_SEC=WAIT_DUR_SEC)
         result = []

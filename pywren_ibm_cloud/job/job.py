@@ -155,11 +155,17 @@ def _create_job(config, internal_storage, executor_id, job_id, func, data, runti
 
     host_job_meta = {'job_created_timestamp': job_created_timestamp}
 
-    logger.debug('ExecutorID {} | JobID {} - Serializing function and data'.format(executor_id, job_id))
+    logger.info('ExecutorID {} | JobID {} - Serializing function and data'.format(executor_id, job_id))
+    
     serializer = SerializeIndependent(runtime_meta['preinstalls'])
+    #import pdb;pdb.set_trace()
     func_and_data_ser, mod_paths = serializer([func] + data, inc_modules, exc_modules)
     data_strs = func_and_data_ser[1:]
     data_size_bytes = sum(len(x) for x in data_strs)
+
+#    from tp.mytrace import timeConsumed
+#    timeConsumed("before create_module_data")
+
     module_data = create_module_data(mod_paths)
     func_str = func_and_data_ser[0]
     func_module_str = pickle.dumps({'func': func_str, 'module_data': module_data}, -1)
@@ -196,6 +202,11 @@ def _create_job(config, internal_storage, executor_id, job_id, func, data, runti
     func_key = create_func_key(JOBS_PREFIX, executor_id, job_id)
     job_description['func_key'] = func_key
     internal_storage.put_func(func_key, func_module_str)
+
+#    timeConsumed("after internal_storage.put_func")
+
+    logger.error("=========== > After internal_storage.put_func")
+
     host_job_meta['func_upload_time'] = time.time() - func_upload_time
     host_job_meta['func_upload_timestamp'] = time.time()
 

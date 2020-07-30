@@ -53,9 +53,12 @@ class InternalStorage:
 
         try:
             module_location = 'pywren_ibm_cloud.storage.backends.{}'.format(self.backend)
+            logger.info(f"module_location {module_location}")
             sb_module = importlib.import_module(module_location)
+            logger.info(f"{sb_module}")
             StorageBackend = getattr(sb_module, 'StorageBackend')
             self.storage_handler = StorageBackend(self.config[self.backend], self.bucket, self.executor_id)
+            logger.info(self.storage_handler)
         except Exception as e:
             raise NotImplementedError("An exception was produced trying to create the "
                                       "'{}' storage backend: {}".format(self.backend, e))
@@ -74,6 +77,7 @@ class InternalStorage:
         :param data: data content
         :return: None
         """
+        logger.info("in put_data")
         return self.storage_handler.put_object(self.bucket, key, data)
 
     def put_func(self, key, func):
@@ -108,10 +112,13 @@ class InternalStorage:
         :param data: data content
         :return: CloudObject instance
         """
+        logger.info("in put_object")
         prefix = os.environ.get('PYWREN_EXECUTION_ID', '')
+        logger.info(prefix)
         name = '{}/cloudobject_{}'.format(prefix, self.cloudobject_count)
         key = key or '/'.join([JOBS_PREFIX, 'cloudobjects', name])
         bucket = bucket or self.bucket
+        logger.info(f'{bucket} {key} {body}')
         self.storage_handler.put_object(bucket, key, body)
         self.cloudobject_count += 1
 

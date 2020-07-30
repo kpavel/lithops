@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+import time
 
 import ssl
 import json
@@ -31,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 class OpenWhiskClient:
 
-    def __init__(self, endpoint, namespace, api_key=None, auth=None, insecure=False, user_agent=None):
+    def __init__(self, endpoint, namespace, api_key=None, auth=None, insecure=True, user_agent=None):
         """
         OpenWhiskClient Constructor
 
@@ -42,7 +43,7 @@ class OpenWhiskClient:
         :param insecure: Insecure backend. Disable cert verification.
         :param user_agent: User agent on requests.
         """
-        self.endpoint = endpoint.replace('http:', 'https:')
+        self.endpoint = endpoint#.replace('http:', 'https:')
         self.namespace = namespace
         self.api_key = api_key
         self.auth = auth
@@ -79,7 +80,7 @@ class OpenWhiskClient:
         limits = {}
         cfexec = {}
         limits['memory'] = memory
-        limits['timeout'] = timeout
+        limits['timeout'] = 60000#timeout
         data['limits'] = limits
 
         cfexec['kind'] = kind
@@ -202,6 +203,8 @@ class OpenWhiskClient:
         parsed_url = urlparse(url)
 
         try:
+            print("------->>>>>>>>   in OPENWHISK.invoke")
+#            import pdb;pdb.set_trace()
             if is_ow_action:
                 resp = self.session.post(url, json=payload, verify=False)
                 resp_status = resp.status_code
@@ -209,12 +212,14 @@ class OpenWhiskClient:
             else:
                 ctx = ssl._create_unverified_context()
                 conn = http.client.HTTPSConnection(parsed_url.netloc, context=ctx)
+                print(f'----------> before ow.client.post {time.time()}')
                 conn.request("POST", parsed_url.geturl(),
                              body=json.dumps(payload),
                              headers=self.headers)
                 resp = conn.getresponse()
                 resp_status = resp.status
                 data = json.loads(resp.read().decode("utf-8"))
+                print(f'<---------- after ow.client.post {time.time()}')
                 conn.close()
         except Exception:
             if not is_ow_action:

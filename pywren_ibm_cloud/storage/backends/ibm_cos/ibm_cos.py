@@ -46,7 +46,7 @@ class IBMCloudObjectStorageBackend:
         self.is_pywren_function = is_pywren_function()
         user_agent = ibm_cos_config['user_agent']
 
-        service_endpoint = ibm_cos_config.get('endpoint').replace('http:', 'https:')
+        service_endpoint = ibm_cos_config.get('endpoint')#.replace('http:', 'https:')
         if self.is_pywren_function and 'private_endpoint' in ibm_cos_config:
             service_endpoint = ibm_cos_config.get('private_endpoint')
             if 'api_key' in ibm_cos_config:

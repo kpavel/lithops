@@ -98,12 +98,26 @@ class JobRunner:
         Save modules, before we unpickle actual function
         """
         if module_data:
-            logger.debug("Writing Function dependencies to local disk")
+            logger.info("Writing Function dependencies to local disk")
             module_path = os.path.join(PYTHON_MODULE_PATH, self.executor_id,
                                        self.job_id, self.call_id)
+
             # shutil.rmtree(PYTHON_MODULE_PATH, True)  # delete old modules
             os.makedirs(module_path, exist_ok=True)
             sys.path.append(module_path)
+
+            def get_size(start_path):
+                total_size = 0
+                for dirpath, dirnames, filenames in os.walk(start_path):
+                    for f in filenames:
+                        fp = os.path.join(dirpath, f)
+                        # skip if it is symbolic link
+                        if not os.path.islink(fp):
+                            total_size += os.path.getsize(fp)
+
+                return total_size
+
+            print(f"Local disk folder {PYTHON_MODULE_PATH} contents: {os.listdir(PYTHON_MODULE_PATH)} size: {get_size(PYTHON_MODULE_PATH)}")
 
             for m_filename, m_data in module_data.items():
                 m_path = os.path.dirname(m_filename)
@@ -121,6 +135,7 @@ class JobRunner:
                 full_filename = os.path.join(to_make, os.path.basename(m_filename))
 
                 with open(full_filename, 'wb') as fid:
+                    logger.info(f"writing data to file {full_filename} - {len(m_data)}")
                     fid.write(b64str_to_bytes(m_data))
 
             #logger.info("Finished writing {} module files".format(len(module_data)))
@@ -241,8 +256,14 @@ class JobRunner:
 
         def wrapper_decorator(*args, **kwargs):
             call('PRE_RUN')
+            print("after calling PRE_RUN")
+
             value = func(*args, **kwargs)
+            print("calling POST_RUN")
+
             call('POST_RUN')
+            print("After calling POST_RUN")
+
             return value
         return wrapper_decorator
 
@@ -256,9 +277,13 @@ class JobRunner:
         result = None
         exception = False
         try:
+            logger.info("Before self._get_function_and_modules")
             loaded_func_all = self._get_function_and_modules()
+            logger.info("self._save_modules")
             self._save_modules(loaded_func_all['module_data'])
+            logger.info("Before self._unpickle_function")
             function = self._unpickle_function(loaded_func_all['func'])
+            logger.info("After self._unpickle_function")
             data = self._load_data()
 
             if strtobool(os.environ.get('__PW_REDUCE_JOB', 'False')):

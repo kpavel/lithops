@@ -1,0 +1,15 @@
+# Based on: https://github.com/ibm-functions/runtime-python/tree/master/python3.7
+
+FROM kpavel/pywren_runtime:base37
+
+RUN apt update
+RUN apt install telnet
+#FROM openwhisk/actionloop-python-v3.7:248efb5
+
+RUN pip3 install --index-url https://test.pypi.org/simple/ --extra-index-url  https://pypi.org/simple/ dataClay==2.4.dev20200508
+
+COPY stubs action/stubs
+#COPY stubs action/1/src/stubs
+
+COPY cfgfiles action/cfgfiles
+#COPY cfgfiles action/1/src/cfgfiles

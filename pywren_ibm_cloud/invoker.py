@@ -209,7 +209,10 @@ class FunctionInvoker:
         # do the invocation
         start = time.time()
         compute_handler = random.choice(self.compute_handlers)
+        print(f'----------> 3 before compute_handler.invoke {time.time()}')
+
         activation_id = compute_handler.invoke(job.runtime_name, job.runtime_memory, payload)
+        print(f'<---------- after compute_handler.invoke {time.time()}')
         roundtrip = time.time() - start
         resp_time = format(round(roundtrip, 3), '.3f')
 
@@ -303,9 +306,11 @@ class FunctionInvoker:
                 executor = ThreadPoolExecutor(max_workers=job.invoke_pool_threads)
                 for i in callids_to_invoke_direct:
                     call_id = "{:05d}".format(i)
+                    print(f'----------> before executor.submit {time.time()}')
                     future = executor.submit(self._invoke, job, call_id)
                     call_futures.append(future)
-                time.sleep(1)
+#                time.sleep(1)
+                time.sleep(0.1)
 
                 # Put into the queue the rest of the callids to invoke within the process
                 if callids_to_invoke_nondirect:
@@ -324,6 +329,7 @@ class FunctionInvoker:
 
             self.job_monitor.start_job_monitoring(job)
 
+        print(f'----------> before create futures {time.time()}')
         # Create all futures
         futures = []
         for i in range(job.total_calls):
@@ -332,6 +338,7 @@ class FunctionInvoker:
             fut._set_state(ResponseFuture.State.Invoked)
             futures.append(fut)
 
+        print(f'----------> before return futures {time.time()}')
         return futures
 
 

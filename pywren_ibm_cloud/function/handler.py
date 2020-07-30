@@ -43,15 +43,20 @@ TEMP = tempfile.gettempdir()
 STORAGE_BASE_DIR = os.path.join(TEMP, JOBS_PREFIX)
 PYWREN_LIBS_PATH = '/action/pywren_ibm_cloud/libs'
 
+#import dataclay
+#from dataclay.api import init, finish
 
 def function_handler(event):
     start_time = time.time()
 
     log_level = event['log_level']
     cloud_logging_config(log_level)
-    logger.debug("Action handler started")
-
+    logger.debug("Action handler started!!!")
     extra_env = event.get('extra_env', {})
+
+    print("-----------extra_env-----!")
+    print(extra_env)
+
     os.environ.update(extra_env)
 
     os.environ.update({'PYWREN_FUNCTION': 'True',
@@ -67,9 +72,9 @@ def function_handler(event):
     runtime_name = event['runtime_name']
     runtime_memory = event['runtime_memory']
     execution_timeout = event['execution_timeout']
-    logger.debug("Runtime name: {}".format(runtime_name))
-    logger.debug("Runtime memory: {}MB".format(runtime_memory))
-    logger.debug("Function timeout: {}s".format(execution_timeout))
+    logger.info("Runtime name: {}".format(runtime_name))
+    logger.info("Runtime memory: {}MB".format(runtime_memory))
+    logger.info("Function timeout: {}s".format(execution_timeout))
 
     func_key = event['func_key']
     data_key = event['data_key']
@@ -93,25 +98,30 @@ def function_handler(event):
     show_memory_peak = strtobool(os.environ.get('SHOW_MEMORY_PEAK', 'False'))
     call_status.response['peak_memory_usage'] = 0
 
+    logger.info("h1")
+
     try:
         if version.__version__ != event['pywren_version']:
             msg = ("PyWren version mismatch. Host version: {} - Runtime version: {}"
                    .format(event['pywren_version'], version.__version__))
             raise RuntimeError('HANDLER', msg)
 
+        logger.info("h2")
         # send init status event
         call_status.send('__init__')
-
+        logger.info("h3")
         # call_status.response['free_disk_bytes'] = free_disk_space("/tmp")
         custom_env = {'PYWREN_CONFIG': json.dumps(config),
                       'PYWREN_EXECUTION_ID': exec_id,
                       'PYTHONPATH': "{}:{}".format(os.getcwd(), PYWREN_LIBS_PATH)}
         os.environ.update(custom_env)
+        logger.info("h4")
 
         jobrunner_stats_dir = os.path.join(STORAGE_BASE_DIR, executor_id, job_id, call_id)
         os.makedirs(jobrunner_stats_dir, exist_ok=True)
         jobrunner_stats_filename = os.path.join(jobrunner_stats_dir, 'jobrunner.stats.txt')
 
+        logger.info("h5")
         jobrunner_config = {'pywren_config': config,
                             'call_id':  call_id,
                             'job_id':  job_id,
@@ -124,21 +134,32 @@ def function_handler(event):
                             'stats_filename': jobrunner_stats_filename}
 
         setup_time = time.time()
+        logger.info("h6")
         call_status.response['setup_time'] = round(setup_time - start_time, 8)
 
         if show_memory_peak:
             mm_handler_conn, mm_conn = Pipe()
             memory_monitor = Thread(target=memory_monitor_worker, args=(mm_conn, ))
             memory_monitor.start()
-
+        logger.info("h7")
         handler_conn, jobrunner_conn = Pipe()
+        print("Creating new JobRunner instance!")
+#        logger.info("Before Creating new JobRunner instance: {}".format(str(dataclay.api._initialized)))
+#        init()
         jobrunner = JobRunner(jobrunner_config, jobrunner_conn, internal_storage)
         logger.debug('Starting JobRunner process')
-        local_execution = strtobool(os.environ.get('__PW_LOCAL_EXECUTION', 'False'))
+        local_execution = strtobool(os.environ.get('__PW_LOCAL_EXECUTION', 'True'))
         jrp = Thread(target=jobrunner.run) if local_execution else Process(target=jobrunner.run)
+
+#        logger.info("After Creating new JobRunner instance: {}".format(str(dataclay.api._initialized)))
+
         jrp.start()
 
         jrp.join(execution_timeout)
+
+#        logger.info("After running new JobRunner instance: {}".format(str(dataclay.api._initialized)))
+#        print(dataclay.api._initialized)
+
         logger.debug('JobRunner process finished')
         call_status.response['exec_time'] = round(time.time() - setup_time, 8)
 
@@ -229,7 +250,9 @@ class CallStatus:
         act_id = self.response['activation_id']
 
         if self.response['type'] == '__init__':
+            logger.info("in _send_status_os with __init__")
             init_key = create_init_key(JOBS_PREFIX, executor_id, job_id, call_id, act_id)
+            logger.info(init_key)
             self.internal_storage.put_data(init_key, '')
 
         elif self.response['type'] == '__end__':
