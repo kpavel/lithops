@@ -84,9 +84,9 @@ class JobRunner:
         self.stats = stats(self.jr_config['stats_filename'])
 
         self.ext_internal_storage = None
-        ext_runtime_storage_config = self.pywren_config.get('ext_runtime', {})
-        if ext_runtime_storage_config:
-            self.ext_internal_storage = InternalStorage(ext_runtime_storage_config)
+        self.ext_runtime_storage_config = self.pywren_config.get('ext_runtime', {})
+        if self.ext_runtime_storage_config:
+            self.ext_internal_storage = InternalStorage(self.ext_runtime_storage_config)
 
     def _get_function_and_modules(self):
         """
@@ -178,7 +178,7 @@ class JobRunner:
         logger.debug("Getting function data")
         data_download_start_tstamp = time.time()
         
-        if self.ext_internal_storage:
+        if self.ext_internal_storage and self.ext_runtime_storage_config.get('store_data', None):
             data_obj = self.ext_internal_storage.get_data(self.data_key, extra_get_args=extra_get_args)
         else: 
             data_obj = self.internal_storage.get_data(self.data_key, extra_get_args=extra_get_args)

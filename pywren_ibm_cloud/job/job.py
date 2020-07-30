@@ -133,9 +133,10 @@ def _create_job(config, internal_storage, executor_id, job_id, func, data, runti
     :return: A list with size `len(iterdata)` of futures for each job
     :rtype:  list of futures.
     """
-    ext_runtime_storage_config = config.get('ext_runtime', {})
-    if ext_runtime_storage_config:
-        internal_storage = InternalStorage(ext_runtime_storage_config)
+#    ext_runtime_storage_config = config.get('ext_runtime', {})
+#    if ext_runtime_storage_config:
+#        import pdb;pdb.set_trace()
+#        internal_storage = InternalStorage(ext_runtime_storage_config)
 
     log_level = os.getenv('PYWREN_LOGLEVEL')
 
@@ -197,9 +198,9 @@ def _create_job(config, internal_storage, executor_id, job_id, func, data, runti
     
     # Generate function + data unique identifier
 #    import pdb;pdb.set_trace()
-    uuid = _gen_uuid(func_str, data_bytes, module_data) 
+    uuid = _gen_uuid(config, func_str, data_bytes, module_data) 
 
-    _store_data(internal_storage, job_description, data_bytes, data_ranges, uuid, host_job_meta) 
+    _store_data(config, internal_storage, job_description, data_bytes, data_ranges, uuid, host_job_meta) 
     
     func_module_str = pickle.dumps({'func': func_str, 'module_data': module_data}, -1)
 
@@ -210,7 +211,7 @@ def _create_job(config, internal_storage, executor_id, job_id, func, data, runti
 
     _store_func_and_modules(config, internal_storage, job_description, func_str, func_module_str, uuid, host_job_meta)
 
-    if ext_runtime_storage_config:
+    if config.get('ext_runtime', {}):
         _update_runtime(job_description, module_data, uuid) 
 
     job_description['metadata'] = host_job_meta
@@ -237,21 +238,31 @@ def _validate_size(config, func_module_str, data_bytes, host_job_meta):
 
     return total_size
 
-def _gen_uuid(func_str, data_bytes, module_data):
-    return hashlib.md5(func_str + data_bytes + pickle.dumps(module_data)).hexdigest()
+def _gen_uuid(config, func_str, data_bytes, module_data):
+    ext_runtime_config = config.get('ext_runtime', {})
+    if ext_runtime_config and ext_runtime_config.get('store_data', None):
+        return hashlib.md5(func_str + data_bytes + pickle.dumps(module_data)).hexdigest()
+    else:
+        return hashlib.md5(func_str + pickle.dumps(module_data)).hexdigest()
 
-def _store_data(internal_storage, job_description, data_bytes, data_ranges, uuid, host_job_meta):
+def _store_data(config, internal_storage, job_description, data_bytes, data_ranges, uuid, host_job_meta):
     data_key = create_agg_data_key(JOBS_PREFIX, uuid, "")
     
     data_upload_start = time.time() 
 #    import pdb;pdb.set_trace()
+
+    ext_runtime_config = config.get('ext_runtime', {})
+#    import pdb;pdb.set_trace()
+    if ext_runtime_config and ext_runtime_config.get('store_data', None):
+        internal_storage = InternalStorage(ext_runtime_config)
+
     internal_storage.put_data(data_key, data_bytes)
     
     data_byte_range = [28, 55]
     range_str = 'bytes={}-{}'.format(*data_byte_range)
     extra_get_args = {}
     extra_get_args['Range'] = range_str
-    aaa = internal_storage.get_data(data_key, extra_get_args=extra_get_args)
+    #aaa = internal_storage.get_data(data_key, extra_get_args=extra_get_args)
     data_upload_end = time.time()
 
     host_job_meta['data_upload_time'] = round(data_upload_end-data_upload_start, 6)
@@ -264,7 +275,10 @@ def _store_func_and_modules(config, internal_storage, job_description, func_str,
 
     func_upload_start = time.time()
 
-    if config.get('ext_runtime', {}):
+    ext_runtime_config = config.get('ext_runtime', {})
+    if ext_runtime_config:
+#        import pdb;pdb.set_trace()
+        internal_storage = InternalStorage(ext_runtime_config)
         internal_storage.put_func(func_key, func_str)
     else:
         internal_storage.put_func(func_key, func_module_str)
