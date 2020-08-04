@@ -13,6 +13,12 @@ def hello(name):
 pw = pywren.ibm_cf_executor()
 #import pdb;pdb.set_trace()
 
-pw.map(hello, ["aaa0", "bbb1", "ccc2", "ddd3", "eee4", "fff5", "ggg6", "hhh7", "iii8", "jjj9", "aaa0", "bbb1", "ccc2", "ddd3", "eee4", "fff5", "ggg6", "hhh7", "iii8", "jjj9", "aaa0", "bbb1", "ccc2", "ddd3", "eee4", "fff5", "ggg6", "hhh7", "iii8", "jjj9"])
+
+pw.map(hello, ["aaa0", "bbb1", "ccc2", "ddd3", "eee4", "fff5", "ggg6", "hhh7", "iii8", "jjj9", "aaa0", "bbb1", "ccc2", "ddd3", "eee4"])
+
+#pw.map(hello, ["aaa0", "bbb1", "ccc2", "ddd3", "eee4", "fff5", "ggg6", "hhh7", "iii8", "jjj9", "aaa0", "bbb1", "ccc2", "ddd3", "eee4", "fff5", "ggg6", "hhh7", "iii8", "jjj9", "aaa0", "bbb1", "ccc2", "ddd3", "eee4", "fff5", "ggg6", "hhh7", "iii8", "jjj9"])
+
+#pw.map(hello, ["aaa0", "bbb1", "ccc2", "ddd3", "eee4", "fff5", "ggg6", "hhh7", "iii8"])
+
 #pw.call_async(hello, 'World', extra_env = {"FOO": 'pywren_ibm_cloud.test4.hello'})
 print(pw.get_result())
