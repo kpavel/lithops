@@ -28,7 +28,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pywren_ibm_cloud.compute import Compute
 from pywren_ibm_cloud.version import __version__
 from pywren_ibm_cloud.future import ResponseFuture
-from pywren_ibm_cloud.config import extract_storage_config, extract_compute_config
+from pywren_ibm_cloud.config import extract_storage_config, extract_compute_config, STORAGE_FOLDER
 from pywren_ibm_cloud.utils import version_str, is_pywren_function, is_unix_system
 
 
@@ -79,6 +79,67 @@ class FunctionInvoker:
         self.ongoing_activations = 0
 
         self.job_monitor = JobMonitor(self.config, self.internal_storage, self.token_bucket_q)
+
+    # If runtime not exists yet, build unique docker image and register runtime
+    def extend_runtime(self, job_description):
+        log_level = os.getenv('PYWREN_LOGLEVEL')
+
+        base_docker_image = job_description['runtime_name']
+        uuid = job_description['ext_runtime_uuid']
+        ext_runtime_name = "{}:{}".format(base_docker_image.split(":")[0], uuid)
+
+        # update job with new extended runtime name
+        job_description['runtime_name'] = ext_runtime_name
+
+        installing = False
+
+        for compute_handler in self.compute_handlers:
+            runtime_key = compute_handler.get_runtime_key(ext_runtime_name, job_description['runtime_memory'])
+            runtime_deployed = True
+            try:
+                runtime_meta = self.internal_storage.get_runtime_meta(runtime_key)
+            except Exception:
+                runtime_deployed = False
+
+            if not runtime_deployed:
+                logger.debug('Runtime {} with {}MB is not yet '
+                             'installed'.format(ext_runtime_name, job_description['runtime_memory']))
+                if not log_level and not installing:
+                    installing = True
+                    print('(Installing...)')
+
+                timeout = self.config['pywren']['runtime_timeout']
+                logger.debug('Creating runtime: {}, memory: {}MB'.format(ext_runtime_name, job_description['runtime_memory']))
+
+                runtime_temorary_directory = '/'.join([STORAGE_FOLDER, os.path.dirname(job_description['func_key'])])
+                modules_path = '/'.join([runtime_temorary_directory, 'modules'])
+
+                ext_docker_file = '/'.join([runtime_temorary_directory, "Dockerfile"])
+
+                # Generate Dockerfile extended with function dependencies and function
+                with open(ext_docker_file, 'w') as df:
+                    df.write('\n'.join([
+                        'FROM {}'.format(base_docker_image),
+                        'ENV PYTHONPATH={}:${}'.format(modules_path,'PYTHONPATH'), # set python path to point to dependencies folder
+                        'COPY . {}'.format(runtime_temorary_directory)
+                    ]))
+
+                # Build new extended runtime tagged by function hash
+                cwd = os.getcwd()
+                os.chdir(runtime_temorary_directory)
+                compute_handler.build_runtime(ext_runtime_name, ext_docker_file)
+                os.chdir(cwd)
+
+                runtime_meta = compute_handler.create_runtime(ext_runtime_name, job_description['runtime_memory'], timeout=timeout)
+                self.internal_storage.put_runtime_meta(runtime_key, runtime_meta)
+
+            py_local_version = version_str(sys.version_info)
+            py_remote_version = runtime_meta['python_ver']
+
+            if py_local_version != py_remote_version:
+                raise Exception(("The indicated runtime '{}' is running Python {} and it "
+                                 "is not compatible with the local Python version {}")
+                                .format(runtime_name, py_remote_version, py_local_version))
 
     def select_runtime(self, job_id, runtime_memory):
         """
@@ -137,6 +198,8 @@ class FunctionInvoker:
             print()
 
         return runtime_meta
+
+
 
     def _start_invoker_process(self):
         """
@@ -296,7 +359,6 @@ class FunctionInvoker:
 
                 log_msg = ('ExecutorID {} | JobID {} - Starting function invocation: {}()  - Total: {} '
                            'activations'.format(job.executor_id, job.job_id, job.function_name, job.total_calls))
-#                import pdb;pdb.set_trace()
                 print(log_msg) if not self.log_level else logger.info(log_msg)
 
                 if self.ongoing_activations < self.workers:

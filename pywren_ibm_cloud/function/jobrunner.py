@@ -64,8 +64,6 @@ class JobRunner:
 
     def __init__(self, jr_config, jobrunner_conn, internal_storage):
 
-        logger.info(f"Initing JobRunner!!! {jr_config}")
-
         self.jr_config = jr_config
         self.jobrunner_conn = jobrunner_conn
         self.internal_storage = internal_storage
@@ -147,27 +145,6 @@ class JobRunner:
         logger.debug("Finished Function unpickle {}".format(loaded_func))
 
         return loaded_func
-
-    def _load_data2(self):
-        extra_get_args = {}
-        if self.data_byte_range is not None:
-            range_str = 'bytes={}-{}'.format(*self.data_byte_range)
-            extra_get_args['Range'] = range_str
-
-        logger.debug("Getting function data from local pickled file")
-        data_download_start_tstamp = time.time()
-#        data_obj = self.internal_storage.get_data(self.data_key, extra_get_args=extra_get_args)
-        
-        data_obj = open(self.data_key, "rb").read()
-        
-        logger.debug("Finished getting Function data")
-        logger.debug("Unpickle Function data")
-        loaded_data = pickle.loads(data_obj)
-        logger.debug("Finished unpickle Function data")
-        data_download_end_tstamp = time.time()
-        self.stats.write('data_download_time', round(data_download_end_tstamp-data_download_start_tstamp, 8))
-
-        return loaded_data
 
     def _load_data(self):
         extra_get_args = {}
@@ -287,7 +264,7 @@ class JobRunner:
         Runs the function
         """
         # self.stats.write('jobrunner_start', time.time())
-        logger.info(f"Started 13")
+        logger.info(f"Started 15")
         result = None
         exception = False
         try:
@@ -295,8 +272,10 @@ class JobRunner:
             data = None
    
             if self.ext_internal_storage:
+                logger.info(f"self.ext_internal_storage")
                 function = self._get_function_and_modules()
             else:
+                logger.info(f"not self.ext_internal_storage")
                 loaded_func_all = self._get_function_and_modules()
                 self._save_modules(loaded_func_all['module_data'])
                 function = self._unpickle_function(loaded_func_all['func'])

@@ -48,13 +48,6 @@ class Compute:
         """
         return self.compute_handler.invoke(runtime_name, memory, payload)
 
-    def build_and_create_runtime(self, runtime_name, file, memory, timeout, is_base_image=False):
-        """
-        Wrapper method to build a new runtime for the compute backend.
-        return: the name of the runtime
-        """
-        return self.compute_handler.build_and_create_runtime(runtime_name, file, memory, timeout, is_base_image)
-
     def get_runtime(self, runtime_name, memory):
         """
         Wrapper method that returns a formated string that represents the runtime key.
