@@ -99,6 +99,16 @@ Notice that if you didn't set a local PyWren's config file, you need to provide 
 
 Alternatively, for debugging purposes, you can run specific tests by `-t <TESTNAME>`. use `--help` flag to get more information about the test script.
 
+## Codeless runtime
+
+In some use-cases total calculation times may be improved by using codeless runtime approach. It achieved by avoiding serialization and transfer of the function + dependencies o/from object storage. Instead, on each pywren Job it checks whether there already exist runtime with already injected function and dependencies. If not, new Docker image with function and dependencies preinstalled builded, based on original runtime image and new runtime automatically created. In order to use it, create the following new section in the .pywren_config
+```
+ext_runtime:
+    backend : localhost
+    bucket : .
+    localhost : _
+```
+
 ## Additional resources
 
 * [Decoding dark molecular matter in spatial metabolomics with IBM Cloud Functions](https://www.ibm.com/cloud/blog/decoding-dark-molecular-matter-in-spatial-metabolomics-with-ibm-cloud-functions)
