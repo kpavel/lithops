@@ -195,7 +195,6 @@ class FunctionExecutor:
                              exclude_modules=exclude_modules,
                              execution_timeout=timeout)
 
-        import pdb;pdb.set_trace()
         if self.config.get('ext_runtime', {}):
             self.invoker.extend_runtime(job)
 

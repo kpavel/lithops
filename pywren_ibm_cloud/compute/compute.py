@@ -48,14 +48,6 @@ class Compute:
         """
         return self.compute_handler.invoke(runtime_name, memory, payload)
 
-    def get_runtime(self, runtime_name, memory):
-        """
-        Wrapper method that returns a formated string that represents the runtime key.
-        Each backend has its own runtime key format. Used to store modules preinstalls
-        into the storage
-        """
-        return self.compute_handler.get_runtime(runtime_name, memory)
-
     def build_runtime(self, runtime_name, file):
         """
         Wrapper method to build a new runtime for the compute backend.

@@ -23,16 +23,6 @@ from pywren_ibm_cloud.config import default_config, extract_storage_config, extr
 logger = logging.getLogger(__name__)
 
 
-def get_runtime(name, memory=None, config=None):
-    config = default_config(config)
-    storage_config = extract_storage_config(config)
-    internal_storage = InternalStorage(storage_config)
-    compute_config = extract_compute_config(config)
-    compute_handler = Compute(compute_config)
-
-    runtime = compute_handler.get_runtime(name, memory)
-    return runtime
-
 def create_runtime(name, memory=None, config=None):
     config = default_config(config)
     storage_config = extract_storage_config(config)

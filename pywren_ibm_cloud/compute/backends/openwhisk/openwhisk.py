@@ -35,7 +35,7 @@ class OpenWhiskBackend:
 
     def __init__(self, ow_config):
         logger.debug("Creating OpenWhisk client")
-        self.log_level = logger.getEffectiveLevel() != logging.WARNING
+        self.log_level = os.getenv('PYWREN_LOGLEVEL')
         self.name = 'openwhisk'
         self.ow_config = ow_config
         self.is_pywren_function = is_pywren_function()
@@ -91,15 +91,15 @@ class OpenWhiskBackend:
         logger.info('Docker image name: {}'.format(docker_image_name))
 
         if dockerfile:
-            cmd = 'DOCKER_BUILDKIT=1 docker build -t {} -f {} .'.format(docker_image_name, dockerfile)
+            cmd = 'docker build -t {} -f {} .'.format(docker_image_name, dockerfile)
         else:
-            cmd = 'DOCKER_BUILDKIT=1 docker build -t {} .'.format(docker_image_name)
+            cmd = 'docker build -t {} .'.format(docker_image_name)
 
         res = os.system(cmd)
         if res != 0:
             exit()
 
-        cmd = 'DOCKER_BUILDKIT=1 docker push {}'.format(docker_image_name)
+        cmd = 'docker push {}'.format(docker_image_name)
         res = os.system(cmd)
         if res != 0:
             exit()
@@ -118,34 +118,15 @@ class OpenWhiskBackend:
         self.cf_client.create_package(self.package)
         action_name = self._format_action_name(docker_image_name, memory)
 
-        # check if docker image already has pywren packages preinstalled
-        action_dir_contents = runtime_meta['action_dir_contents']
-        if '__main__.py' in action_dir_contents and 'pywren_ibm_cloud' in action_dir_contents:
-            self.cf_client.create_action(self.package, action_name, docker_image_name, code=None,
-                                     memory=memory, is_binary=False, timeout=timeout*1000)
-        else:
-            create_function_handler_zip(ibmcf_config.FH_ZIP_LOCATION, '__main__.py', __file__)
+        create_function_handler_zip(openwhisk_config.FH_ZIP_LOCATION, '__main__.py', __file__)
 
-            with open(ibmcf_config.FH_ZIP_LOCATION, "rb") as action_zip:
-                action_bin = action_zip.read()
-            self.cf_client.create_action(self.package, action_name, docker_image_name, code=action_bin,
+        with open(openwhisk_config.FH_ZIP_LOCATION, "rb") as action_zip:
+            action_bin = action_zip.read()
+        self.cf_client.create_action(self.package, action_name, docker_image_name, code=action_bin,
                                      memory=memory, is_binary=True, timeout=timeout*1000)
-            self._delete_function_handler_zip()
+        self._delete_function_handler_zip()
         return runtime_meta
 
-    def get_runtime(self, docker_image_name, memory):
-        """
-        Gets a runtime
-        """
-        action_name = self._format_action_name(docker_image_name, memory)
-        return self.cf_client.get_action(self.package, action_name)
-
-         # TODO: remove all the child runtimes. comsider to hold this information in the meta
-#                remove runtime docker image from private docker registry
-#        if is_base_image:
-#            for runtime in self.list_runtimes():
-#                if runtime[0].split(":")[0] == docker_image_name.split(":")[0]:
-#                    self.delete_runtime(runtime[0], runtime[1])
     def delete_runtime(self, docker_image_name, memory):
         """
         Deletes a runtime
@@ -214,7 +195,6 @@ class OpenWhiskBackend:
         action_code = """
             import sys
             import pkgutil
-            from os import listdir
 
             def main(args):
                 print("Extracting preinstalled Python modules...")
@@ -223,8 +203,6 @@ class OpenWhiskBackend:
                 runtime_meta["preinstalls"] = [entry for entry in sorted([[mod, is_pkg] for _, mod, is_pkg in mods])]
                 python_version = sys.version_info
                 runtime_meta["python_ver"] = str(python_version[0])+"."+str(python_version[1])
-                action_dir_contents = listdir("/action")
-                runtime_meta["action_dir_contents"] = action_dir_contents
                 print("Done!")
                 return runtime_meta
             """

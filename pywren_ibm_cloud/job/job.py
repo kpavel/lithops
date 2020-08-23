@@ -29,10 +29,10 @@ from pywren_ibm_cloud.storage.utils import create_func_key, create_agg_data_key
 from pywren_ibm_cloud.job.serialize import SerializeIndependent, create_module_data
 from pywren_ibm_cloud.config import MAX_AGG_DATA_SIZE, JOBS_PREFIX, STORAGE_FOLDER
 from pywren_ibm_cloud.storage import InternalStorage
-from pywren_ibm_cloud.cli.runtime import build_runtime, create_runtime, get_runtime
 from pywren_ibm_cloud.utils import b64str_to_bytes
 
 import hashlib
+import inspect
 logger = logging.getLogger(__name__)
 
 
@@ -135,7 +135,6 @@ def _create_job(config, internal_storage, executor_id, job_id, func, data, runti
     :rtype:  list of futures.
     """
     log_level = os.getenv('PYWREN_LOGLEVEL')
-
     runtime_name = config['pywren']['runtime']
     if runtime_memory is None:
         runtime_memory = config['pywren']['runtime_memory']
@@ -185,16 +184,23 @@ def _create_job(config, internal_storage, executor_id, job_id, func, data, runti
     logger.debug('ExecutorID {} | JobID {} - Serializing function and data'.format(executor_id, job_id))
     serializer = SerializeIndependent(runtime_meta['preinstalls'])
     func_and_data_ser, mod_paths = serializer([func] + data, inc_modules, exc_modules)
+    data_strs = func_and_data_ser[1:]
+    data_size_bytes = sum(len(x) for x in data_strs)
 
     module_data = create_module_data(mod_paths)
-    data_bytes, data_ranges = utils.agg_data(func_and_data_ser[1:])
     func_str = func_and_data_ser[0]
     
-    # Generate function + data unique identifier
-    uuid = _gen_uuid(config, func_str, data_bytes, module_data) 
+    # Upload data
+    data_key = create_agg_data_key(JOBS_PREFIX, executor_id, job_id)
+    job_description['data_key'] = data_key
+    data_bytes, data_ranges = utils.agg_data(data_strs)
+    job_description['data_ranges'] = data_ranges
+    data_upload_start = time.time()
+    internal_storage.put_data(data_key, data_bytes)
+    data_upload_end = time.time()
 
-    _store_data(config, internal_storage, job_description, data_bytes, data_ranges, uuid, host_job_meta) 
-    
+    host_job_meta['data_upload_time'] = round(data_upload_end-data_upload_start, 6)
+ 
     func_module_str = pickle.dumps({'func': func_str, 'module_data': module_data}, -1)
 
     total_size = _validate_size(config, job_description, func_module_str, data_bytes, host_job_meta)
@@ -203,10 +209,7 @@ def _create_job(config, internal_storage, executor_id, job_id, func, data, runti
                '- Total: {}'.format(job_description['executor_id'], job_description['job_id'], total_size))
     print(log_msg) if not log_level else logger.info(log_msg)
 
-    _store_func_and_modules(config, internal_storage, job_description, func_str, module_data, func_module_str, uuid, host_job_meta)
-
-#    if config.get('ext_runtime', {}):
-#        _extend_runtime(job_description, uuid) 
+    _store_func_and_modules(config, internal_storage, job_description, func, func_str, module_data, func_module_str, host_job_meta)
 
     job_description['metadata'] = host_job_meta
     return job_description
@@ -232,86 +235,30 @@ def _validate_size(config, job_description, func_module_str, data_bytes, host_jo
 
     return total_size
 
-def _gen_uuid(config, func_str, data_bytes, module_data):
-    ext_runtime_config = config.get('ext_runtime', {})
-    if ext_runtime_config and ext_runtime_config.get('store_data', None):
-        return hashlib.md5(func_str + data_bytes + pickle.dumps(module_data)).hexdigest()
-    else:
-        return hashlib.md5(func_str + pickle.dumps(module_data)).hexdigest()
-
-def _store_data(config, internal_storage, job_description, data_bytes, data_ranges, uuid, host_job_meta):
-    data_key = create_agg_data_key(JOBS_PREFIX, uuid, "")
-    
-    data_upload_start = time.time() 
-    ext_runtime_config = config.get('ext_runtime', {})
-    if ext_runtime_config and ext_runtime_config.get('store_data', None):
-        internal_storage = InternalStorage(ext_runtime_config)
-
-    internal_storage.put_data(data_key, data_bytes)
-    data_upload_end = time.time()
-
-    host_job_meta['data_upload_time'] = round(data_upload_end-data_upload_start, 6)
-    
-    job_description['data_key'] = data_key
-    job_description['data_ranges'] = data_ranges
-
-def _store_func_and_modules(config, internal_storage, job_description, func_str, module_data, func_module_str, uuid, host_job_meta):
-    func_key = create_func_key(JOBS_PREFIX, uuid, "")
-
+def _store_func_and_modules(config, internal_storage, job_description, func, func_str, module_data, func_module_str, host_job_meta):
     func_upload_start = time.time()
 
     ext_runtime_config = config.get('ext_runtime', {})
     if ext_runtime_config:
+        uuid = hashlib.md5(bytes(inspect.getsource(func), 'utf-8') + pickle.dumps(module_data)).hexdigest()
+        func_key = create_func_key(JOBS_PREFIX, uuid, "")
+
         internal_storage = InternalStorage(ext_runtime_config)
         internal_storage.put_func(func_key, func_str)
         modules_path = '/'.join([STORAGE_FOLDER, os.path.dirname(func_key), 'modules'])
         _save_modules(module_data, modules_path)
+
+        uuid = hashlib.md5(bytes(inspect.getsource(func), 'utf-8') + pickle.dumps(module_data)).hexdigest()
+        
         job_description['ext_runtime_uuid'] = uuid
     else:
+        func_key = create_func_key(JOBS_PREFIX, job_description['executor_id'], job_description['job_id'])
         internal_storage.put_func(func_key, func_module_str)
 
     job_description['func_key'] = func_key
     func_upload_end = time.time()
 
     host_job_meta['func_upload_time'] = round(func_upload_end - func_upload_start, 6) 
-
-# If runtime not exists yet, build unique docker image and register runtime
-def _extend_runtime(job_description, uuid):
-    base_docker_image = job_description['runtime_name']
-    ext_docker_image = "{}:{}".format(base_docker_image.split(":")[0], uuid)
-
-    # update job with new extended runtime name
-    job_description['runtime_name'] = ext_docker_image
-
-    # simple check that the runtime action already present
-    # TODO: move higher in the flow, no need to do almost anything if it is there
-    # TODO: consider to store extended pywren runtime details in metadata later.
-    runtime = get_runtime(ext_docker_image, memory=job_description['runtime_memory'])
-    if 'error' not in runtime:
-        return
-
-    runtime_temorary_directory = '/'.join([STORAGE_FOLDER, os.path.dirname(job_description['func_key'])])
-
-    # Unpickle pickled modules
-    modules_path = '/'.join([runtime_temorary_directory, 'modules'])
-#    _save_modules(module_data, MODULES)
-
-    ext_docker_file = '/'.join([runtime_temorary_directory, "Dockerfile"])
-
-    # Generate Dockerfile extended with function dependencies and function
-    with open(ext_docker_file, 'w') as df:
-            df.write('\n'.join([
-                'FROM {}'.format(base_docker_image),
-                'ENV PYTHONPATH={}:${}'.format(modules_path,'PYTHONPATH'), # set python path to point to dependencies folder
-                'COPY . {}'.format(runtime_temorary_directory)
-            ]))
-
-    # Build new extended runtime tagged by function hash
-    cwd = os.getcwd()
-    os.chdir(runtime_temorary_directory)
-    build_runtime(ext_docker_image, ext_docker_file)
-    os.chdir(cwd)
-    create_runtime(ext_docker_image)
 
 def _save_modules(module_data, module_path):
     """

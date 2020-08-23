@@ -140,9 +140,9 @@ class JobRunner:
         """
         Unpickle function; it will expect modules to be there
         """
-        logger.debug("Unpickle Function {}".format(pickled_func))
+        logger.debug("Unpickle Function")
         loaded_func = pickle.loads(pickled_func)
-        logger.debug("Finished Function unpickle {}".format(loaded_func))
+        logger.debug("Finished Function unpickle")
 
         return loaded_func
 
@@ -154,11 +154,7 @@ class JobRunner:
 
         logger.debug("Getting function data")
         data_download_start_tstamp = time.time()
-        
-        if self.ext_internal_storage and self.ext_runtime_storage_config.get('store_data', None):
-            data_obj = self.ext_internal_storage.get_data(self.data_key, extra_get_args=extra_get_args)
-        else: 
-            data_obj = self.internal_storage.get_data(self.data_key, extra_get_args=extra_get_args)
+        data_obj = self.internal_storage.get_data(self.data_key, extra_get_args=extra_get_args)
         logger.debug("Finished getting Function data")
         logger.debug("Unpickle Function data")
         loaded_data = pickle.loads(data_obj)
@@ -264,18 +260,15 @@ class JobRunner:
         Runs the function
         """
         # self.stats.write('jobrunner_start', time.time())
-        logger.info(f"Started 15")
+        logger.info("Started")
         result = None
         exception = False
         try:
             function = None
-            data = None
    
             if self.ext_internal_storage:
-                logger.info(f"self.ext_internal_storage")
                 function = self._get_function_and_modules()
             else:
-                logger.info(f"not self.ext_internal_storage")
                 loaded_func_all = self._get_function_and_modules()
                 self._save_modules(loaded_func_all['module_data'])
                 function = self._unpickle_function(loaded_func_all['func'])

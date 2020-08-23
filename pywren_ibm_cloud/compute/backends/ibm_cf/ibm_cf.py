@@ -166,19 +166,13 @@ class IBMCloudFunctionsBackend:
         self.cf_client.create_package(self.package)
         action_name = self._format_action_name(docker_image_name, memory)
 
-        # check if docker image already has pywren packages preinstalled
-        action_dir_contents = runtime_meta['action_dir_contents']
-        if '__main__.py' in action_dir_contents and 'pywren_ibm_cloud' in action_dir_contents:
-            self.cf_client.create_action(self.package, action_name, docker_image_name, code=None,
-                                     memory=memory, is_binary=False, timeout=timeout*1000) 
-        else:
-            create_function_handler_zip(ibmcf_config.FH_ZIP_LOCATION, '__main__.py', __file__)
+        create_function_handler_zip(ibmcf_config.FH_ZIP_LOCATION, '__main__.py', __file__)
 
-            with open(ibmcf_config.FH_ZIP_LOCATION, "rb") as action_zip:
-                action_bin = action_zip.read()
-            self.cf_client.create_action(self.package, action_name, docker_image_name, code=action_bin,
+        with open(ibmcf_config.FH_ZIP_LOCATION, "rb") as action_zip:
+            action_bin = action_zip.read()
+        self.cf_client.create_action(self.package, action_name, docker_image_name, code=action_bin,
                                      memory=memory, is_binary=True, timeout=timeout*1000)
-            self._delete_function_handler_zip()
+        self._delete_function_handler_zip()
         return runtime_meta
 
     def delete_runtime(self, docker_image_name, memory):
@@ -189,15 +183,6 @@ class IBMCloudFunctionsBackend:
             docker_image_name = self._get_default_runtime_image_name()
         action_name = self._format_action_name(docker_image_name, memory)
         self.cf_client.delete_action(self.package, action_name)
-
-    def get_runtime(self, docker_image_name, memory):
-        """
-        Gets a runtime
-        """
-        if docker_image_name == 'default':
-            docker_image_name = self._get_default_runtime_image_name()
-        action_name = self._format_action_name(docker_image_name, memory)
-        return self.cf_client.get_action(self.package, action_name)
 
     def delete_all_runtimes(self):
         """
@@ -261,7 +246,6 @@ class IBMCloudFunctionsBackend:
         action_code = """
             import sys
             import pkgutil
-            from os import listdir
 
             def main(args):
                 print("Extracting preinstalled Python modules...")
@@ -270,8 +254,6 @@ class IBMCloudFunctionsBackend:
                 runtime_meta["preinstalls"] = [entry for entry in sorted([[mod, is_pkg] for _, mod, is_pkg in mods])]
                 python_version = sys.version_info
                 runtime_meta["python_ver"] = str(python_version[0])+"."+str(python_version[1])
-                action_dir_contents = listdir("/action")
-                runtime_meta["action_dir_contents"] = action_dir_contents
                 print("Done!")
                 return runtime_meta
             """
