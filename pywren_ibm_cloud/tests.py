@@ -75,6 +75,10 @@ class TestMethods:
         return "Hello World!"
 
     @staticmethod
+    def concat(lst):
+        return " ".join(lst)
+
+    @staticmethod
     def simple_map_function(x, y):
         return x + y
 
@@ -153,7 +157,7 @@ class TestMethods:
     def my_map_function_storage(key_i, bucket_name, storage):
         print('I am processing the object /{}/{}'.format(bucket_name, key_i))
         counter = {}
-        data = storage.get_object(Bucket=bucket_name, Key=key_i)['Body'].read()
+        data = storage.get_object(bucket_name, key_i)
         for line in data.splitlines():
             for word in line.decode('utf-8').split():
                 if word not in counter:
@@ -203,6 +207,11 @@ class TestPywren(unittest.TestCase):
         self.assertEqual(result, "Hello World!")
 
         pw = pywren.function_executor(config=CONFIG)
+        pw.call_async(TestMethods.concat, ["a", "b"])
+        result = pw.get_result()
+        self.assertEqual(result, "a b")
+
+        pw = pywren.function_executor(config=CONFIG)
         pw.call_async(TestMethods.simple_map_function, [4, 6])
         result = pw.get_result()
         self.assertEqual(result, 10)
@@ -242,6 +251,12 @@ class TestPywren(unittest.TestCase):
         pw.map(TestMethods.simple_map_function, listDicts_iterdata)
         result = pw.get_result()
         self.assertEqual(result, [10, 10])
+
+        pw = pywren.function_executor(config=CONFIG)
+        set_iterdata = [["a", "b"], ["c", "d"]]
+        pw.map(TestMethods.concat, set_iterdata)
+        result = pw.get_result()
+        self.assertEqual(result, ["a b", "c d"])
 
     def test_map_reduce(self):
         print('Testing map_reduce()...')
@@ -410,7 +425,7 @@ def run_tests(test_to_run, config=None):
 
     CONFIG = json.load(args.config) if config else default_config()
     STORAGE_CONFIG = extract_storage_config(CONFIG)
-    STORAGE = InternalStorage(STORAGE_CONFIG).storage_handler
+    STORAGE = InternalStorage(STORAGE_CONFIG).storage
 
     suite = unittest.TestSuite()
     if test_to_run == 'all':

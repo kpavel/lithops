@@ -26,7 +26,7 @@ class DockerBackend:
     """
 
     def __init__(self, docker_config):
-        self.log_level = os.getenv('PYWREN_LOGLEVEL')
+        self.log_active = logger.getEffectiveLevel() != logging.WARNING
         self.config = docker_config
         self.name = 'docker'
         self.host = docker_config['host']
@@ -42,7 +42,7 @@ class DockerBackend:
 
         log_msg = 'PyWren v{} init for Docker - Host: {}'.format(__version__, self.host)
         logger.info(log_msg)
-        if not self.log_level:
+        if not self.log_active:
             print(log_msg)
 
     def _format_runtime_name(self, docker_image_name):
@@ -72,7 +72,7 @@ class DockerBackend:
 
         out = stdout.read().decode().strip()
         error = stderr.read().decode().strip()
-        if self.log_level:
+        if self.log_active:
             logger.info(out)
         if error:
             raise Exception('There was an error pulling the runtime: {}'.format(error))
@@ -126,7 +126,7 @@ class DockerBackend:
                                .format(name,  TEMP, docker_config.PYWREN_SERVER_PORT,
                                        docker_image_name, DOCKER_BASE_FOLDER))
 
-                    if not self.log_level:
+                    if not self.log_active:
                         cmd = cmd + " >{} 2>&1".format(os.devnull)
                     res = os.system(cmd)
                     if res != 0:
@@ -136,7 +136,14 @@ class DockerBackend:
         else:
             running_runtimes_cmd = "docker ps --format '{{.Names}}' -f name=pywren"
             running_runtimes = self._ssh_run_remote_command(running_runtimes_cmd)
-            cmd = ('docker run -d --name {} -v /tmp:/tmp -p 8080:{}'
+            used_runtimes_cmd = "docker ps -a --format '{{.Names}}' -f name=pywren"
+            used_runtimes = self._ssh_run_remote_command(used_runtimes_cmd)
+
+            if name not in running_runtimes and name in used_runtimes:
+                cmd = 'docker rm -f {}'.format(name)
+                self._ssh_run_remote_command(cmd)
+
+            cmd = ('docker run -d --name {} --user $(id -u):$(id -g) -v /tmp:/tmp -p 8080:{}'
                    ' --entrypoint "python" {} /tmp/{}/__main__.py'
                    .format(name, docker_config.PYWREN_SERVER_PORT,
                            docker_image_name, DOCKER_BASE_FOLDER))
@@ -189,7 +196,7 @@ class DockerBackend:
                 self.docker_client.images.pull(docker_image_name)
             else:
                 cmd = 'docker pull {}'.format(docker_image_name)
-                if not self.log_level:
+                if not self.log_active:
                     cmd = cmd + " >{} 2>&1".format(os.devnull)
                 res = os.system(cmd)
                 if res != 0:
@@ -229,7 +236,7 @@ class DockerBackend:
                 self.docker_client.containers.stop(name, force=True)
             else:
                 cmd = 'docker rm -f {}'.format(name)
-                if not self.log_level:
+                if not self.log_active:
                     cmd = cmd + " >{} 2>&1".format(os.devnull)
                 os.system(cmd)
         else:
@@ -251,7 +258,7 @@ class DockerBackend:
                 running_containers = subprocess.check_output(list_runtimes_cmd, shell=True).decode().strip()
                 for name in running_containers.splitlines():
                     cmd = 'docker rm -f {}'.format(name)
-                    if not self.log_level:
+                    if not self.log_active:
                         cmd = cmd + " >{} 2>&1".format(os.devnull)
                     os.system(cmd)
         else:

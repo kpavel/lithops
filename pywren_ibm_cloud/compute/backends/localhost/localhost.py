@@ -1,3 +1,4 @@
+import atexit
 import os
 import sys
 import uuid
@@ -20,17 +21,20 @@ class LocalhostBackend:
     """
 
     def __init__(self, local_config):
-        self.log_level = os.getenv('PYWREN_LOGLEVEL')
+        self.log_active = logger.getEffectiveLevel() != logging.WARNING
         self.config = local_config
         self.name = 'local'
         self.alive = True
         self.queue = Queue()
         self.logs_dir = os.path.join(STORAGE_FOLDER, LOGS_PREFIX)
         self.num_workers = self.config['workers']
+        self.use_threads = not is_unix_system()
 
         self.workers = []
 
-        if not is_unix_system():
+        atexit.register(self.close)
+
+        if self.use_threads:
             for worker_id in range(self.num_workers):
                 p = Thread(target=self._process_runner, args=(worker_id,))
                 self.workers.append(p)
@@ -40,19 +44,18 @@ class LocalhostBackend:
             for worker_id in range(self.num_workers):
                 p = Process(target=self._process_runner, args=(worker_id,))
                 self.workers.append(p)
-                p.daemon = True
                 p.start()
 
         log_msg = 'PyWren v{} init for Localhost - Total workers: {}'.format(__version__, self.num_workers)
         logger.info(log_msg)
-        if not self.log_level:
+        if not self.log_active:
             print(log_msg)
 
     def _local_handler(self, event):
         """
         Handler to run local functions.
         """
-        if not self.log_level:
+        if not self.log_active:
             old_stdout = sys.stdout
             sys.stdout = open(os.devnull, 'w')
 
@@ -61,7 +64,7 @@ class LocalhostBackend:
         os.environ['__PW_ACTIVATION_ID'] = act_id
         function_handler(event)
 
-        if not self.log_level:
+        if not self.log_active:
             sys.stdout = old_stdout
 
     def _process_runner(self, worker_id):
@@ -144,8 +147,19 @@ class LocalhostBackend:
         """
         return os.path.join(self.name, runtime_name)
 
-    def __del__(self):
+    def close(self):
         if self.alive:
             self.alive = False
             for worker in self.workers:
                 self.queue.put(None)
+
+            # Clean up process-based workers in case any are stuck
+            if not self.use_threads:
+                for worker_id, worker in enumerate(self.workers):
+                    if worker.is_alive():
+                        logger.debug('Terminating worker process {}'.format(worker_id))
+                        worker.terminate()
+
+    def __del__(self):
+        atexit.unregister(self.close)
+        self.close()

@@ -55,12 +55,12 @@ The primary object in PyWren is the executor. The standard way to get everything
 
 The available executors are:
 
-* `ibm_cf_executor()`: IBM Cloud Functions executor.
-* `knative_executor()`: Knative executor. See [additional information](docs/knative.md).
-* `openwhisk_executor()`: Vanilla OpenWhisk executor. See [additional information](docs/openwhisk.md).
-* `local_executor()`: Localhost executor to run functions by using local processes.
-* `docker_executor()`: Docker executor to run functions by using processes within a local or remote Docker container.
-* `function_executor()`: Generic executor based on the compute backend specified in configuration.
+* `ibm_cf_executor()`: IBM Cloud Functions executor. See [additional information](docs/executors/ibm_cf.md).
+* `knative_executor()`: Knative executor. See [additional information](docs/executors/knative.md).
+* `openwhisk_executor()`: Vanilla OpenWhisk executor. See [additional information](docs/executors/openwhisk.md).
+* `local_executor()`: Run functions by using local processes. See [additional information](docs/executors/localhost.md).
+* `docker_executor()`: Run functions by using processes within a local or remote Docker container. See [additional information](docs/executors/docker.md).
+* `function_executor()`: Generic executor based on the compute backend set in configuration.
 
 The available calls within an executor are:
 
@@ -101,13 +101,13 @@ Alternatively, for debugging purposes, you can run specific tests by `-t <TESTNA
 
 ## Additional resources
 
+* [Decoding dark molecular matter in spatial metabolomics with IBM Cloud Functions](https://www.ibm.com/cloud/blog/decoding-dark-molecular-matter-in-spatial-metabolomics-with-ibm-cloud-functions)
 * [Your easy move to serverless computing and radically simplified data processing](https://conferences.oreilly.com/strata/strata-ny/public/schedule/detail/77226) Strata Data Conference, NY 2019
   * See video of PyWren-IBM usage [here](https://www.youtube.com/watch?v=EYa95KyYEtg&list=PLpR7f3Www9KCjYisaG7AMaR0C2GqLUh2G&index=3&t=0s) and the example of Monte Carlo [here](https://www.youtube.com/watch?v=vF5HI2q5VKw&list=PLpR7f3Www9KCjYisaG7AMaR0C2GqLUh2G&index=2&t=0s)
 * [Ants, serverless computing, and simplified data processing](https://developer.ibm.com/blogs/2019/01/31/ants-serverless-computing-and-simplified-data-processing/)
 * [Speed up data pre-processing with PyWren in deep learning](https://developer.ibm.com/patterns/speed-up-data-pre-processing-with-pywren-in-deep-learning/)
 * [Predicting the future with Monte Carlo simulations over IBM Cloud Functions](https://www.ibm.com/cloud/blog/monte-carlo-simulations-with-ibm-cloud-functions)
 * [Process large data sets at massive scale with PyWren over IBM Cloud Functions](https://www.ibm.com/cloud/blog/process-large-data-sets-massive-scale-pywren-ibm-cloud-functions)
-* [PyWren for IBM Cloud on CODAIT](https://developer.ibm.com/code/open/centers/codait/projects/pywren/)
 * [Industrial project in Technion on PyWren-IBM](http://www.cs.technion.ac.il/~cs234313/projects_sites/W19/04/site/)
 * [Serverless data analytics in the IBM Cloud](https://dl.acm.org/citation.cfm?id=3284029) - Proceedings of the 19th International Middleware Conference (Industry)
 
