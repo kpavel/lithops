@@ -27,6 +27,7 @@ from pywren_ibm_cloud.job.partitioner import create_partitions
 from pywren_ibm_cloud.utils import is_object_processing_function, sizeof_fmt
 from pywren_ibm_cloud.storage.utils import create_func_key, create_agg_data_key
 from pywren_ibm_cloud.job.serialize import SerializeIndependent, create_module_data
+from pywren_ibm_cloud.config import extract_storage_config
 from pywren_ibm_cloud.config import MAX_AGG_DATA_SIZE, JOBS_PREFIX, STORAGE_FOLDER
 from pywren_ibm_cloud.storage import InternalStorage
 from pywren_ibm_cloud.utils import b64str_to_bytes
@@ -245,9 +246,10 @@ def _store_func_and_modules(config, internal_storage, job_description, func, fun
         uuid = hashlib.md5(bytes(inspect.getsource(func), 'utf-8') + pickle.dumps(module_data)).hexdigest()
         func_key = create_func_key(JOBS_PREFIX, uuid, "")
 
-        internal_storage = InternalStorage(ext_runtime_config)
-        internal_storage.put_func(func_key, func_str)
-        modules_path = '/'.join([STORAGE_FOLDER, os.path.dirname(func_key), 'modules'])
+    #    import pdb;pdb.set_trace()
+        func_path = '/'.join([STORAGE_FOLDER, func_key])
+        _save_func(func_str, func_path)
+        modules_path = '/'.join([os.path.dirname(func_path), 'modules'])
         _save_modules(module_data, modules_path)
 
         uuid = hashlib.md5(bytes(inspect.getsource(func), 'utf-8') + pickle.dumps(module_data)).hexdigest()
@@ -261,6 +263,11 @@ def _store_func_and_modules(config, internal_storage, job_description, func, fun
     func_upload_end = time.time()
 
     host_job_meta['func_upload_time'] = round(func_upload_end - func_upload_start, 6) 
+
+def _save_func(func_str, func_path):
+    os.makedirs(os.path.dirname(func_path), exist_ok=True)
+    with open(func_path, "wb") as f:
+        f.write(func_str)
 
 def _save_modules(module_data, module_path):
     """

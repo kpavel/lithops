@@ -33,7 +33,7 @@ from pywren_ibm_cloud.future import ResponseFuture
 from pywren_ibm_cloud.libs.tblib import pickling_support
 from pywren_ibm_cloud.utils import sizeof_fmt, b64str_to_bytes, is_object_processing_function
 from pywren_ibm_cloud.utils import WrappedStreamingBodyPartition
-from pywren_ibm_cloud.config import cloud_logging_config
+from pywren_ibm_cloud.config import cloud_logging_config, STORAGE_FOLDER
 
 from pydoc import locate
 
@@ -81,10 +81,7 @@ class JobRunner:
 
         self.stats = stats(self.jr_config['stats_filename'])
 
-        self.ext_internal_storage = None
         self.ext_runtime_storage_config = self.pywren_config.get('ext_runtime', {})
-        if self.ext_runtime_storage_config:
-            self.ext_internal_storage = InternalStorage(self.ext_runtime_storage_config)
 
     def _get_function_and_modules(self):
         """
@@ -93,8 +90,8 @@ class JobRunner:
         logger.debug("Getting function and modules")
         func_download_start_tstamp = time.time()
         func_obj = None
-        if self.ext_internal_storage:
-            func_obj = self.ext_internal_storage.get_func(self.func_key)
+        if self.ext_runtime_storage_config:
+            func_obj = self._get_func()
         else:
             func_obj = self.internal_storage.get_func(self.func_key)
         loaded_func_all = pickle.loads(func_obj)
@@ -103,6 +100,11 @@ class JobRunner:
         logger.debug("Finished getting Function and modules")
 
         return loaded_func_all
+
+    def _get_func(self):
+        func_path = '/'.join([STORAGE_FOLDER, self.func_key])
+        with open(func_path, "rb") as f:
+            return f.read()
 
     def _save_modules(self, module_data):
         """
@@ -265,13 +267,15 @@ class JobRunner:
         exception = False
         try:
             function = None
+            logger.info("Before self._get_function_and_modules")
    
-            if self.ext_internal_storage:
+            if self.ext_runtime_storage_config:
                 function = self._get_function_and_modules()
             else:
                 loaded_func_all = self._get_function_and_modules()
                 self._save_modules(loaded_func_all['module_data'])
                 function = self._unpickle_function(loaded_func_all['func'])
+            logger.info("After self._unpickle_function")
             data = self._load_data()
 
             if strtobool(os.environ.get('__PW_REDUCE_JOB', 'False')):
